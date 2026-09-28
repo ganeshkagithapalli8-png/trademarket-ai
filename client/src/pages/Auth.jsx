@@ -164,6 +164,18 @@ export default function AuthPage() {
             </Alert>
           )}
 
+          <Button size="lg" className="w-full" icon="zap" loading={demoBusy} onClick={startDemo} data-testid="guest-button">
+            {demoBusy ? 'Opening guest session…' : 'Continue as guest — no email needed'}
+          </Button>
+          <p className="mt-1.5 text-center text-[11px] leading-snug text-slate-400">
+            Instant paper account, saved in this browser. Upgrade to an email account any time.
+          </p>
+          <div className="mt-4 flex items-center gap-3">
+            <span className="divider flex-1" />
+            <span className="text-[10.5px] font-extrabold uppercase tracking-widest text-slate-400">or use an email</span>
+            <span className="divider flex-1" />
+          </div>
+
           <form onSubmit={submit} className="space-y-3.5" noValidate>
             {mode === 'signup' && (
               <Input
@@ -265,18 +277,7 @@ export default function AuthPage() {
             </Button>
           </form>
 
-          <div className="mt-4 flex items-center gap-3">
-            <span className="divider flex-1" />
-            <span className="text-[10.5px] font-extrabold uppercase tracking-widest text-slate-400">or</span>
-            <span className="divider flex-1" />
-          </div>
-          <Button variant="secondary" size="lg" className="mt-3 w-full" icon="spark" loading={demoBusy} onClick={startDemo}>
-            Just looking? Open a funded demo
-          </Button>
-          <Link to="/" className="mt-2 block text-center text-[12.5px] font-semibold text-slate-500 hover:underline">
-            Just show me the markets →
-          </Link>
-          <p className="mt-2 text-center text-[11px] leading-snug text-slate-400">
+          <p className="mt-3 text-center text-[11px] leading-snug text-slate-400">
             ₹5,00,000 simulated · every market unlocked · nothing real, ever
           </p>
 

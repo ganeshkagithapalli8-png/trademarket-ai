@@ -70,6 +70,7 @@ export default function Layout({ children }) {
     nav('/auth', { replace: true });
   };
 
+  const isGuest = String(user?.email || '').endsWith('@paper.trademarket');
   const initials = (user?.fullName || user?.email || '?')
     .split(/\s+/)
     .map((s) => s[0])
@@ -136,8 +137,11 @@ export default function Layout({ children }) {
                 <div className="absolute right-0 z-20 mt-2 w-60 animate-scale-in overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-lift backdrop-blur-xl">
                   <div className="border-b border-slate-100 px-4 py-3">
                     <p className="truncate text-[13.5px] font-bold text-slate-900">{user?.fullName || 'Trader'}</p>
-                    <p className="truncate text-[12px] text-slate-500">{user?.email}</p>
+                    <p className="truncate text-[12px] text-slate-500">
+                      {isGuest ? 'Guest session · saved in this browser' : user?.email}
+                    </p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
+                      {isGuest && <Badge tone="brand" icon="zap">Guest</Badge>}
                       <Badge tone={user?.ageVerified ? 'done' : 'warn'} icon={user?.ageVerified ? 'shield' : 'alert'}>
                         {user?.ageVerified ? '18+ verified' : 'Age unverified'}
                       </Badge>

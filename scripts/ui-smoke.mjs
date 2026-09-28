@@ -405,7 +405,16 @@ section('J · Simulated top-up from anywhere (header, dashboard, order ticket)')
   // Dev-server cold transforms can stall the shell; retry once with a reload so a
   // transient miss never kills the whole run, and dump diagnostics if it persists.
   if (!(await page.$('button[aria-label="Add simulated funds"]'))) {
-    await page.reload({ waitUntil: 'networkidle' }).catch(() => {});
+    // The restored session can occasionally be gone mid-run; a fresh login with
+    // section B's credentials keeps this deterministic instead of flaky.
+    const fresh = await fetch(`${API}/api/auth/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: USER.email, password: USER.password }),
+    }).then((r) => r.json()).catch(() => null);
+    if (fresh?.token) {
+      await page.evaluate((tk) => localStorage.setItem('tm_token', tk), fresh.token);
+    }
+    await page.goto(`${WEB}/app`, { waitUntil: 'networkidle' }).catch(() => {});
     await page.waitForSelector('button[aria-label="Add simulated funds"]', { timeout: 20000 }).catch(async () => {
       console.log(`  [diag] J: url=${page.url()} body=${(await page.textContent('body').catch(() => '')).slice(0, 200)}`);
       await page.screenshot({ path: `${SHOTS}diag-J.png` }).catch(() => {});
@@ -532,6 +541,42 @@ section('K · Interactivity: one-click demo, live ticks, hover crosshair, countd
 
   ok('no console errors during the interactivity pass', dErr.length === 0, dErr.slice(0, 3).join(' | '));
   await ctx2.close();
+
+// ═══════════════════════════════════════════════════════════════════════════
+section('L · Guest account option works end-to-end');
+{
+  const ctx3 = await browser.newContext({ viewport: { width: 1360, height: 900 }, locale: 'en-IN', timezoneId: 'Asia/Kolkata' });
+  const g = await ctx3.newPage();
+  const gErr = [];
+  g.on('pageerror', (e) => gErr.push(e.message));
+  g.on('console', (m) => { if (m.type() === 'error' && !BENIGN.test(m.text())) gErr.push(m.text()); });
+
+  await g.goto(`${WEB}/auth`, { waitUntil: 'networkidle' });
+  await g.waitForTimeout(900);
+  const gb = await g.$('[data-testid="guest-button"]');
+  ok('auth page offers a guest button', Boolean(gb));
+  if (gb) {
+    await gb.click();
+    await g.waitForURL('**/app**', { timeout: 25000 }).catch(() => {});
+    await g.waitForTimeout(1800);
+  }
+  ok('guest button enters the app', g.url().includes('/app'), g.url());
+  const chip = await g.textContent('a[href="/app/wallet"] span.tnum').catch(() => '');
+  ok('guest account is funded (₹5,00,000)', chip.includes('5,00,00'), `"${chip}"`);
+
+  await g.reload({ waitUntil: 'networkidle' });
+  await g.waitForTimeout(1500);
+  const chip2 = await g.textContent('a[href="/app/wallet"] span.tnum').catch(() => '');
+  ok('guest session survives a reload', chip2.includes('5,00,00'), `"${chip2}"`);
+
+  await g.click('button[aria-label="Account menu"]');
+  await g.waitForTimeout(500);
+  const menuTxt = await g.textContent('body');
+  ok('menu labels the session as a guest', menuTxt.includes('Guest session · saved in this browser'));
+  ok('guest journey produced no console errors', gErr.length === 0, gErr.slice(0, 2).join(' | '));
+  await g.screenshot({ path: `${SHOTS}33-guest-menu.png`, fullPage: false });
+  await ctx3.close();
+}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -52,10 +52,16 @@ function EnterMarkets() {
   useEffect(() => {
     if (loading || user || started.current) return;
     started.current = true;
-    AuthApi.demo()
-      .then((r) => adopt(r.token, r.user))
-      .then(() => nav(dest, { replace: true }))
-      .catch((e) => { started.current = false; setErr(e.message || 'Could not reach the market server.'); });
+    const attempt = (left) =>
+      AuthApi.demo()
+        .then((r) => adopt(r.token, r.user))
+        .then(() => nav(dest, { replace: true }))
+        .catch((e) => {
+          if (left > 0) return new Promise((r2) => setTimeout(r2, 900)).then(() => attempt(left - 1));
+          started.current = false;
+          setErr(e.message || 'Could not reach the market server.');
+        });
+    attempt(2);
   }, [loading, user, adopt, nav, dest]);
 
   useEffect(() => {

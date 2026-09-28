@@ -15,20 +15,24 @@ const RAW_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 export const API_BASE = RAW_BASE || '';
 
 const TOKEN_KEY = 'tm_token';
+// Some environments block localStorage outright (private windows, embedded
+// frames). A memory mirror keeps the guest session alive for the tab even then.
+let memoryToken = null;
 
 export const getToken = () => {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    return localStorage.getItem(TOKEN_KEY) ?? memoryToken;
   } catch {
-    return null;
+    return memoryToken;
   }
 };
 export const setToken = (t) => {
+  memoryToken = t || null;
   try {
     if (t) localStorage.setItem(TOKEN_KEY, t);
     else localStorage.removeItem(TOKEN_KEY);
   } catch {
-    /* private mode */
+    /* private mode — memory mirror still holds the session */
   }
 };
 export const clearToken = () => setToken(null);
