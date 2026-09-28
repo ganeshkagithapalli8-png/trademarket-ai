@@ -107,7 +107,7 @@ app.get('/api/health', async (_req, res) => {
 
 app.use('/api/auth', (req, res, next) => {
   res.on('finish', () => {
-    console.log(`[auth] ${req.method} ${req.path} -> ${res.status} origin=${req.headers.origin || '-'}`);
+    console.log(`[auth] ${req.method} ${req.originalUrl} -> ${res.statusCode} origin=${req.headers.origin || '-'}`);
   });
   next();
 });

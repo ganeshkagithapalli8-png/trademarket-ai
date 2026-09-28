@@ -97,9 +97,11 @@ router.post(
 // A funded, fully-unlocked PAPER account so anyone can touch a working app
 // in two clicks. Simulated rupees only, exactly like every other account;
 // rate-limited like the rest of auth. Nothing here can hold real money.
+// No per-route limiter here: guest creation is cheap (no bcrypt) and the global
+// apiLimiter already floods-guards /api. A dedicated quota turned reload storms
+// into "app won't open" walls for real users.
 router.post(
   '/demo',
-  demoLimiter,
   asyncH(async (req, res) => {
     const email = `demo.${Date.now()}@paper.trademarket`;
     // Guest accounts are session-only and must never password-login, so skip the
