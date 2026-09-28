@@ -194,7 +194,7 @@ export const authLimiter = rateLimit({
 // generous limiter of its own; credential routes keep the strict one.
 export const demoLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 300,
+  limit: 600,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   keyGenerator: (req) => req.ip,

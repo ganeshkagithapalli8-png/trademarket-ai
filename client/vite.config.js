@@ -10,6 +10,10 @@ export default defineConfig({
     port: 5173,
     allowedHosts: true,
     strictPort: false,
+    // The Arena viewer embeds the preview in a sandboxed iframe whose origin is
+    // 'null'; Vite 6's default dev CORS would block our own module scripts there
+    // (blank page). Reflecting the origin keeps embedded previews working.
+    cors: { origin: true, credentials: true },
     proxy: {
       // Relative /api calls are proxied to the Express server, so the browser
       // never needs to know where the backend lives and CORS never fires in dev.

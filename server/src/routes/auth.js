@@ -102,8 +102,10 @@ router.post(
   demoLimiter,
   asyncH(async (req, res) => {
     const email = `demo.${Date.now()}@paper.trademarket`;
-    const password = crypto.randomBytes(18).toString('hex');
-    const hash = await bcrypt.hash(password, config.bcryptRounds);
+    // Guest accounts are session-only and must never password-login, so skip the
+    // bcrypt work entirely: this placeholder can never verify (cheap guest creation
+    // also keeps the guest quota from costing CPU under reload storms).
+    const hash = '$2b$10$' + '.'.repeat(53); // valid shape, never verifies
 
     const user = await admin(async (c) => {
       const { rows } = await c.query(
