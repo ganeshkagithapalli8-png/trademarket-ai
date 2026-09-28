@@ -27,6 +27,15 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 4173,
     allowedHosts: true,
+    // Production preview must behave exactly like dev for the embedded viewer:
+    // same /api proxy and same permissive CORS (sandboxed frames are origin null).
+    cors: { origin: true, credentials: true },
+    proxy: {
+      '/api': {
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:5000',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     outDir: 'dist',

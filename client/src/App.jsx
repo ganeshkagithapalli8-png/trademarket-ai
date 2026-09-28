@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate, Link } from 'react-router-dom';
 import { Auth as AuthApi } from './lib/api.js';
-import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import { AuthProvider, useAuth, guestGuard } from './context/AuthContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
 import { FundsProvider } from './context/FundsContext.jsx';
 import Layout from './components/Layout.jsx';
@@ -41,6 +41,13 @@ function PageLoader() {
  * guest paper session — no email, no account form in the way. Email accounts
  * remain opt-in at /auth (and the marketing tour lives at /welcome).
  */
+// Concurrent gate mounts must not create parallel guest sessions (409 storms).
+let pendingDemo = null;
+const demoOnce = () => {
+  pendingDemo = pendingDemo || AuthApi.demo().finally(() => { pendingDemo = null; });
+  return pendingDemo;
+};
+
 function EnterMarkets() {
   const { user, loading, adopt } = useAuth();
   const nav = useNavigate();
@@ -51,9 +58,15 @@ function EnterMarkets() {
 
   useEffect(() => {
     if (loading || user || started.current) return;
+    if (guestGuard.broken) {
+      setErr('Your guest session was not accepted. Press Try again, or sign in with an email account.');
+      return;
+    }
     started.current = true;
+    guestGuard.lastAt = Date.now();
+    guestGuard.broken = false;
     const attempt = (left) =>
-      AuthApi.demo()
+      demoOnce()
         .then((r) => adopt(r.token, r.user))
         .then(() => nav(dest, { replace: true }))
         .catch((e) => {
@@ -67,7 +80,10 @@ function EnterMarkets() {
   }, [loading, user, adopt, nav, dest]);
 
   useEffect(() => {
-    if (!loading && user) nav(dest, { replace: true });
+    if (!loading && user) {
+      guestGuard.broken = false; // a live session resets the loop-breaker
+      nav(dest, { replace: true });
+    }
   }, [loading, user, nav, dest]);
 
   return (
@@ -79,7 +95,7 @@ function EnterMarkets() {
             <p className="text-[14px] font-bold text-slate-800">The market server did not answer</p>
             <p className="text-[12.5px] leading-snug text-slate-500">{err}</p>
             <button
-              onClick={() => { setErr(''); started.current = false; }}
+              onClick={() => { setErr(''); started.current = false; guestGuard.broken = false; }}
               className="rounded-xl bg-brand-600 px-4 py-2 text-[13px] font-bold text-white transition hover:bg-brand-700"
             >
               Try again

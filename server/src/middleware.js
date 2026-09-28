@@ -221,7 +221,7 @@ export const tradeLimiter = rateLimit({
 
 export const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  limit: config.isProd ? 400 : 2000,
+  limit: config.isProd ? 400 : 6000,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   keyGenerator: key,
