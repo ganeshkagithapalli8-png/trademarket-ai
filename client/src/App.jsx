@@ -57,9 +57,11 @@ function EnterMarkets() {
         .then((r) => adopt(r.token, r.user))
         .then(() => nav(dest, { replace: true }))
         .catch((e) => {
-          if (left > 0) return new Promise((r2) => setTimeout(r2, 900)).then(() => attempt(left - 1));
+          const msg = e.message || 'Could not reach the market server.';
+          const limited = /too many guest/i.test(msg);
+          if (!limited && left > 0) return new Promise((r2) => setTimeout(r2, 900)).then(() => attempt(left - 1));
           started.current = false;
-          setErr(e.message || 'Could not reach the market server.');
+          setErr(msg);
         });
     attempt(2);
   }, [loading, user, adopt, nav, dest]);

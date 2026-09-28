@@ -190,6 +190,17 @@ export const authLimiter = rateLimit({
   message: { error: 'Too many attempts. Please wait a few minutes and try again.' },
 });
 
+// Guest/demo entry is the app's front door now (zero-click), so it gets a
+// generous limiter of its own; credential routes keep the strict one.
+export const demoLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip,
+  message: { error: 'Too many guest sessions from this network. Sign in with an email account, or wait a few minutes.' },
+});
+
 export const aiLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 8,

@@ -7,7 +7,7 @@ import { admin, withUser } from '../db/index.js';
 import {
   asyncH, badRequest, conflict, requireAuth, unauthorized, requireFields,
   validEmail, passwordIssues, ageFromDob, issueSession, publicProfile,
-  cookieOpts, COOKIE_NAME, HttpError, authLimiter,
+  cookieOpts, COOKIE_NAME, HttpError, authLimiter, demoLimiter,
 } from '../middleware.js';
 
 const router = Router();
@@ -99,7 +99,7 @@ router.post(
 // rate-limited like the rest of auth. Nothing here can hold real money.
 router.post(
   '/demo',
-  authLimiter,
+  demoLimiter,
   asyncH(async (req, res) => {
     const email = `demo.${Date.now()}@paper.trademarket`;
     const password = crypto.randomBytes(18).toString('hex');
