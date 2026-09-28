@@ -189,7 +189,7 @@ export default function Settings() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[12px] font-semibold text-slate-800">{s.device || 'Unknown device'}</p>
                   <p className="mt-0.5 text-[10.5px] text-slate-400">
-                    {s.ip || 'no ip'} · {timeAgo(s.createdAt)} · expires {dateTime(s.expiresAt)}
+                    {s.ip || 'no ip'} · signed in {timeAgo(s.createdAt)} · active
                   </p>
                 </div>
                 {s.active && (

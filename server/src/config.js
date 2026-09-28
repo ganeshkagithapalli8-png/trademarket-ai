@@ -24,7 +24,8 @@ export const config = {
 
   jwt: {
     secret: process.env.JWT_SECRET || '',
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    // Sessions are effectively permanent: no expiry popups, no kick-outs.
+    expiresIn: process.env.JWT_EXPIRES_IN || '10y',
   },
   bcryptRounds: num(process.env.BCRYPT_ROUNDS, 12),
 

@@ -100,7 +100,7 @@ export default function AuthPage() {
         toast.success('Welcome to TradeMarket AI', 'Start at module 1 — the path is sequential for a reason.');
       } else {
         await login({ email: form.email.trim().toLowerCase(), password: form.password });
-        toast.success('Signed in', loc.state?.expired ? 'Your previous session had expired.' : undefined);
+        toast.success('Signed in');
       }
       nav(loc.state?.from && loc.state.from.startsWith('/app') ? loc.state.from : '/app', { replace: true });
     } catch (err) {
@@ -154,9 +154,7 @@ export default function AuthPage() {
             ))}
           </div>
 
-          {loc.state?.expired && mode === 'login' && (
-            <Alert tone="warn" className="mb-4">Your session expired. Sign in again to continue.</Alert>
-          )}
+
 
           {error && (
             <Alert tone="danger" className="mb-4">

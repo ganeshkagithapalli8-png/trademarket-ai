@@ -39,7 +39,8 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     setUnauthorizedHandler(() => {
       setUser(null);
-      navigate('/auth', { replace: true, state: { expired: true } });
+      // No expiry screens anywhere: a dead session silently re-enters the app.
+      navigate('/', { replace: true });
     });
   }, [navigate]);
 

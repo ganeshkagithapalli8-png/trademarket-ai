@@ -35,10 +35,10 @@ export function issueSession(user, { deviceLabel, ip } = {}) {
 }
 
 function parseExpiry(s) {
-  const m = String(s).match(/^(\d+)([smhd])$/);
-  if (!m) return 7 * 24 * 3600 * 1000;
+  const m = String(s).match(/^(\d+)([smhdy])$/);
+  if (!m) return 10 * 365 * 86_400_000;
   const n = Number(m[1]);
-  return n * { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[m[2]];
+  return n * { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000, y: 365 * 86_400_000 }[m[2]];
 }
 
 export const cookieOpts = () => ({

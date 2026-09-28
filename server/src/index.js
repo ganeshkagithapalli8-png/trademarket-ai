@@ -105,6 +105,12 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
+app.use('/api/auth', (req, res, next) => {
+  res.on('finish', () => {
+    console.log(`[auth] ${req.method} ${req.path} -> ${res.status} origin=${req.headers.origin || '-'}`);
+  });
+  next();
+});
 app.use('/api', apiLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
