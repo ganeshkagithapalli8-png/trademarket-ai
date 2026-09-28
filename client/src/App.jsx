@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { Routes, Route, Navigate, useLocation, useNavigate, Link } from 'react-router-dom';
+import { Auth as AuthApi } from './lib/api.js';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
 import { FundsProvider } from './context/FundsContext.jsx';
@@ -35,6 +36,65 @@ function PageLoader() {
   );
 }
 
+/**
+ * Zero-click entry: opening the app drops you straight into the markets with a
+ * guest paper session — no email, no account form in the way. Email accounts
+ * remain opt-in at /auth (and the marketing tour lives at /welcome).
+ */
+function EnterMarkets() {
+  const { user, loading, adopt } = useAuth();
+  const nav = useNavigate();
+  const loc = useLocation();
+  const [err, setErr] = useState('');
+  const started = useRef(false);
+  const dest = loc.state?.from || '/app/markets';
+
+  useEffect(() => {
+    if (loading || user || started.current) return;
+    started.current = true;
+    AuthApi.demo()
+      .then((r) => adopt(r.token, r.user))
+      .then(() => nav(dest, { replace: true }))
+      .catch((e) => { started.current = false; setErr(e.message || 'Could not reach the market server.'); });
+  }, [loading, user, adopt, nav, dest]);
+
+  useEffect(() => {
+    if (!loading && user) nav(dest, { replace: true });
+  }, [loading, user, nav, dest]);
+
+  return (
+    <div className="grid min-h-screen place-items-center bg-slate-50 px-6">
+      <div className="flex w-full max-w-sm flex-col items-center gap-4 text-center">
+        <Logo className="h-12 w-12 animate-pulse-soft" />
+        {err ? (
+          <>
+            <p className="text-[14px] font-bold text-slate-800">The market server did not answer</p>
+            <p className="text-[12.5px] leading-snug text-slate-500">{err}</p>
+            <button
+              onClick={() => { setErr(''); started.current = false; }}
+              className="rounded-xl bg-brand-600 px-4 py-2 text-[13px] font-bold text-white transition hover:bg-brand-700"
+            >
+              Try again
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-[15px] font-extrabold tracking-tight text-slate-900">Opening your markets…</p>
+            <p className="text-[12.5px] leading-snug text-slate-500">
+              Guest paper session — simulated rupees, no email needed.
+            </p>
+            <Spinner className="h-6 w-6 text-brand-500" />
+          </>
+        )}
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pt-1 text-[12px] font-semibold text-slate-500">
+          <Link to="/auth" className="text-brand-600 hover:underline">Use an email account instead</Link>
+          <Link to="/welcome" className="hover:underline">What is this app?</Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Protected({ children }) {
   const { user, loading } = useAuth();
   const loc = useLocation();
@@ -48,7 +108,7 @@ function Protected({ children }) {
       </div>
     );
   }
-  if (!user) return <Navigate to="/auth" replace state={{ from: loc.pathname }} />;
+  if (!user) return <Navigate to="/" replace state={{ from: loc.pathname }} />;
   return <Layout>{children}</Layout>;
 }
 
@@ -66,7 +126,8 @@ export default function App() {
         <FundsProvider>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            <Route path="/" element={<Landing />} />
+            <Route path="/" element={<EnterMarkets />} />
+            <Route path="/welcome" element={<Landing />} />
             <Route path="/auth" element={<PublicOnly><AuthPage /></PublicOnly>} />
 
             <Route path="/app" element={<Protected><Dashboard /></Protected>} />

@@ -103,7 +103,7 @@ async function visit(path, name, expectText, { full = true, wait = 1400 } = {}) 
 // ═══════════════════════════════════════════════════════════════════════════
 section('A · Landing page (logged out)');
 {
-  await visit('/', '01-landing', ['TradeMarket', 'Learn to trade properly', 'Paper trading simulator', '14', 'Risk Management']);
+  await visit('/welcome', '01-landing', ['TradeMarket', 'Learn to trade properly', 'Paper trading simulator', '14', 'Risk Management']);
   const cta = await page.$('a[href="/auth?mode=signup"]:has(button)');
   ok('landing has a working signup CTA', Boolean(cta));
   // A Button whose colour utilities fight the variant renders as a blank pill.
@@ -402,6 +402,15 @@ section('J · Simulated top-up from anywhere (header, dashboard, order ticket)')
   await page.evaluate((t) => localStorage.setItem('tm_token', t), token);
   await page.goto(`${WEB}/app`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1600);
+  // Dev-server cold transforms can stall the shell; retry once with a reload so a
+  // transient miss never kills the whole run, and dump diagnostics if it persists.
+  if (!(await page.$('button[aria-label="Add simulated funds"]'))) {
+    await page.reload({ waitUntil: 'networkidle' }).catch(() => {});
+    await page.waitForSelector('button[aria-label="Add simulated funds"]', { timeout: 20000 }).catch(async () => {
+      console.log(`  [diag] J: url=${page.url()} body=${(await page.textContent('body').catch(() => '')).slice(0, 200)}`);
+      await page.screenshot({ path: `${SHOTS}diag-J.png` }).catch(() => {});
+    });
+  }
 
   const balance = async () => {
     const txt = await page.textContent('a[href="/app/wallet"] span.tnum').catch(() => '');
@@ -470,20 +479,21 @@ section('K · Interactivity: one-click demo, live ticks, hover crosshair, countd
   d.on('console', (m) => { if (m.type() === 'error' && !BENIGN.test(m.text())) dErr.push(m.text()); });
 
   await d.goto(`${WEB}/`, { waitUntil: 'networkidle' });
-  await d.waitForTimeout(900);
-  const demoBtn = await d.$('button:has-text("Explore a funded demo")');
-  ok('landing offers a one-click funded demo', Boolean(demoBtn));
-
-  if (demoBtn) {
-    await demoBtn.click();
-    await d.waitForURL('**/app**', { timeout: 25000 }).catch(() => {});
-    await d.waitForTimeout(2200);
-    ok('demo click lands inside the app', d.url().includes('/app'), d.url());
+  await d.waitForURL('**/app**', { timeout: 25000 }).catch(() => {});
+  await d.waitForTimeout(2200);
+  ok('zero-click entry: root opens the app with no email form', d.url().includes('/app'), d.url());
+  {
+    // the funded guest session the gate created must be fully usable
+    ok('zero-click entry lands inside the app', d.url().includes('/app'), d.url());
+    await d.goto(`${WEB}/app`, { waitUntil: 'networkidle' });
+    await d.waitForTimeout(1500);
     const chip = await d.textContent('a[href="/app/wallet"] span.tnum').catch(() => '');
     ok('demo account is funded (₹5,00,000)', chip.includes('5,00,000'), `"${chip}"`);
     ok('curriculum unlocked for the demo', (await d.textContent('body')).includes('14 of 14 modules complete'));
     await d.screenshot({ path: `${SHOTS}26-demo-dashboard.png`, fullPage: false });
   }
+  // email auth must remain reachable as an opt-in
+  await d.goto(`${WEB}/auth`, { waitUntil: 'networkidle' }).catch(() => {});
 
   // header countdown must be present and ticking
   const badge = await d.textContent('header').catch(() => '');

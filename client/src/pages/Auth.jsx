@@ -273,6 +273,9 @@ export default function AuthPage() {
           <Button variant="secondary" size="lg" className="mt-3 w-full" icon="spark" loading={demoBusy} onClick={startDemo}>
             Just looking? Open a funded demo
           </Button>
+          <Link to="/" className="mt-2 block text-center text-[12.5px] font-semibold text-slate-500 hover:underline">
+            Just show me the markets →
+          </Link>
           <p className="mt-2 text-center text-[11px] leading-snug text-slate-400">
             ₹5,00,000 simulated · every market unlocked · nothing real, ever
           </p>
