@@ -1,4 +1,8 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'node:url';
+// Load server/.env by absolute path — `import 'dotenv/config'` resolves against
+// process.cwd(), which silently misses the file when the API is started from the repo root.
+dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) });
 
 const bool = (v, fallback = false) => {
   if (v === undefined || v === null || v === '') return fallback;
@@ -58,6 +62,7 @@ export const config = {
     redirectUri: process.env.UPSTOX_REDIRECT_URI || 'http://localhost:5000/api/provider/upstox/callback',
     apiBase: process.env.UPSTOX_API_BASE || 'https://api.upstox.com', // test override only
     feedWs: process.env.UPSTOX_FEED_WS || '', // test-only WS override (SDK hardcodes the prod feed URL)
+    pollMs: Number(process.env.UPSTOX_POLL_MS || 30_000), // keyless public-feed cadence; 1-min candles need no faster poll and this respects Upstox's per-IP budget
   },
   safety: {
     // Hard rail. There is no order-routing code in this repository at all.

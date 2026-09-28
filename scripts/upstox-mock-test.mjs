@@ -34,8 +34,9 @@ const server = http.createServer((req, res) => {
   } } });
   if (url.pathname.startsWith('/v2/historical-candle/')) {
     const parts = url.pathname.split('/');
-    const interval = parts[4];
-    const step = { '1minute': 60_000, '1hour': 3_600_000 }[interval] || 300_000;
+    const isIntraday = parts[3] === 'intraday';
+    const interval = isIntraday ? parts[5] : parts[4];
+    const step = { '1minute': 60_000, '1hour': 3_600_000, day: 86_400_000 }[interval] || 300_000;
     const now = Date.now();
     const candles = Array.from({ length: 8 }, (_, i) => {
       const t = new Date(now - (8 - i) * step).toISOString();

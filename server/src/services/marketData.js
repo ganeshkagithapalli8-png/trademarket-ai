@@ -39,7 +39,7 @@ export function sessionOpen(inst, now = new Date()) {
 
 /** Which provider owns this symbol right now? */
 export function providerFor(symbol) {
-  if (upstoxProvider.configured && upstoxProvider.resolve(symbol)) return 'upstox';
+  if ((upstoxProvider.configured || upstoxProvider.publicOk) && upstoxProvider.resolve(symbol)) return 'upstox';
   return 'paper';
 }
 
@@ -50,7 +50,10 @@ export function feedInfo(symbol, q) {
   if (prov === 'upstox') {
     const st = upstoxProvider.status();
     const open = upstoxProvider.marketOpen();
-    if (st.state === 'live') return { source: 'upstox', latency: 'live', label: 'LIVE · UPSTOX', marketOpen: true, providerState: 'live' };
+    if (st.state === 'live') {
+      const ws = upstoxProvider.configured && upstoxProvider.streamer;
+      return { source: 'upstox', latency: 'live', label: ws ? 'LIVE · UPSTOX WS' : 'LIVE · UPSTOX 1-MIN', marketOpen: true, providerState: 'live' };
+    }
     if (!open || st.state === 'market_closed') return { source: 'upstox', latency: 'closed', label: 'MARKET CLOSED', marketOpen: false, providerState: st.state };
     return { source: 'upstox', latency: 'error', label: 'CONNECTION ERROR', marketOpen: open, providerState: st.state, reason: st.reason };
   }
@@ -67,7 +70,7 @@ export function feedInfo(symbol, q) {
 
 /** getQuote(symbol) — facade entry. Upstox first when it owns the symbol. */
 export async function getQuoteAsync(symbol) {
-  if (providerFor(symbol) === 'upstox' && upstoxProvider.state !== 'unconfigured') {
+  if (providerFor(symbol) === 'upstox') {
     try {
       const q = await upstoxProvider.getQuote(symbol);
       return { ...q, feed: feedInfo(symbol, q) };
@@ -85,7 +88,7 @@ export function getQuote(symbol) {
 /** getHistoricalData(symbol, timeframe) — facade entry (async: may hit Upstox). */
 export async function getHistoricalDataAsync(symbol, timeframe = '5m', limit = 240) {
   const tf = TIMEFRAMES.includes(timeframe) ? timeframe : '5m';
-  if (providerFor(symbol) === 'upstox' && upstoxProvider.configured) {
+  if (providerFor(symbol) === 'upstox') {
     try {
       const candles = await upstoxProvider.getHistoricalCandles(symbol, tf, limit);
       if (candles.length) return candles.map((c) => ({ ...c, timeframe: tf, provider: 'upstox' }));

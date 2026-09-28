@@ -32,8 +32,10 @@ export const adminPool = dbEnabled
       connectionString: adminConnectionString,
       ssl: sslFor(adminConnectionString),
       max: 5,
-      idleTimeoutMillis: 30_000,
+      idleTimeoutMillis: 20_000,
       connectionTimeoutMillis: 15_000,
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 5_000,
     })
   : null;
 
@@ -84,8 +86,10 @@ export function appPool() {
     connectionString: cs,
     ssl: sslFor(cs),
     max: 10,
-    idleTimeoutMillis: 30_000,
+    idleTimeoutMillis: 20_000,
     connectionTimeoutMillis: 10_000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 5_000,
   });
   // If the role can't authenticate, fall back rather than taking the app down.
   appPoolInstance.on('error', (err) => {

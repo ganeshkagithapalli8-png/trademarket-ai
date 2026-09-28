@@ -135,6 +135,39 @@ Two ways to obtain an access token (Upstox tokens expire daily):
   Upstox's dialog, and land on `/api/provider/upstox/callback`. The exchanged
   token is stored **server-side in memory only** and used until expiry.
 
+### 1b · Keyless "public mode" (no credentials needed)
+
+With `UPSTOX_CLIENT_ID` / `SECRET` / `ACCESS_TOKEN` all absent, the backend
+still serves **real NSE prices** through Upstox's publicly-answering REST
+candle endpoints (`/v2/historical-candle/...` — they respond 200 without a
+token). No HTML is scraped and no auth is bypassed; these are official API
+routes that Upstox serves unauthenticated.
+
+* Boot probes the feed (`probePublic`). When reachable, subscribed symbols
+  (≤ 10) are polled every `UPSTOX_POLL_MS` (default 30 s — 1-minute candles
+  carry no faster information) for **1-minute intraday candles**, turned
+  into ticks and streamed over the normal `/ws/market`. Poll cycles never
+  overlap.
+* The feed chip reads **`LIVE · UPSTOX 1-MIN`** during NSE hours
+  (09:15–15:30 IST) and **`MARKET CLOSED`** outside them — showing the real
+  last-traded price and previous close, never a simulated number.
+* Timeframes Upstox doesn't serve keyless are **aggregated server-side**
+  from the ones it does (`1minute`, `30minute`, `day`, `week`, `month`):
+  5m/15m from 1-minute candles, 1h/4h from 30-minute candles.
+* Previous close comes from daily candles with IST-date awareness (today's
+  daily bar is only finalised after market close).
+* No bid/ask or market depth in this mode — the quote strip shows `—`
+  instead of inventing numbers.
+* Rate limits: these endpoints carry a per-IP request budget. On `429` the
+  poller backs off (doubling its interval, honouring `Retry-After`, capped
+  at 5 min) and returns to the default cadence once requests succeed again;
+  a `429` during the boot probe schedules backoff re-probes (30 s → 10 min
+  cap) instead of latching "unreachable". On `401/403` public mode disables itself. If the feed is
+  unreachable, everything falls back to the clearly labelled **PAPER VENUE**.
+* The moment real credentials land (env restart or in-app OAuth), polling
+  stops and the official protobuf **WebSocket feed** takes over
+  (`LIVE · UPSTOX WS`, with bid/ask + depth) — no config change needed.
+
 ### 2 · Backend service surface (`server/src/services/marketData.js`)
 
 `getQuote(symbol)` · `getHistoricalCandles(symbol, timeframe)` ·
@@ -149,8 +182,10 @@ reconnect, 429 backoff, a no-tick watchdog and an instrument-master download.
   updates the live candle in place and rolls over on timeframe expiry.
 * Status chip shows exactly one of `● LIVE · ● DELAYED · ● MARKET CLOSED ·
   ● CONNECTION ERROR`; LIVE only while provider ticks are actually arriving.
-* With no Upstox credentials the app stays on the clearly labelled paper
-  venue — simulated prices are never presented as live quotes.
+* With no Upstox credentials the app first tries the keyless public mode
+  (§ 1b); only if that feed is unreachable or rate-limited does it stay on
+  the clearly labelled paper venue — simulated prices are never presented
+  as live quotes.
 
 ### 4 · TradingView (official paths only)
 

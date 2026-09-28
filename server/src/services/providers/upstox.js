@@ -27,6 +27,18 @@ const NSE_OPEN = 9.25; // 09:15 IST
 const NSE_CLOSE = 15.5; // 15:30 IST
 const TICK_WATCHDOG_MS = 20_000;
 
+/* Keyless public endpoint only serves these intervals; everything else is
+ * aggregated server-side from them (pure bucketing, nothing synthetic). */
+const PUB_SOURCE = {
+  '1m': ['1minute', 1], '5m': ['1minute', 5], '15m': ['1minute', 15],
+  '30m': ['30minute', 1], '1h': ['30minute', 2], '4h': ['30minute', 8],
+  '1D': ['day', 1], '1W': ['week', 1], '1M': ['month', 1],
+};
+const PUB_TF_MS = {
+  '1m': 60_000, '5m': 300_000, '15m': 900_000, '30m': 1_800_000,
+  '1h': 3_600_000, '4h': 14_400_000, '1D': 86_400_000, '1W': 604_800_000, '1M': 2_592_000_000,
+};
+
 /* Interval map for Upstox historical candles (4h is aggregated from 1h). */
 const INTERVALS = {
   '1m': '1minute', '5m': '5minute', '15m': '15minute', '30m': '30minute',
@@ -65,6 +77,14 @@ class UpstoxProvider extends EventEmitter {
     this.token = null; // { accessToken, expiresAt }
     this.oauthState = null;
     this.watchdog = null;
+    this.publicOk = null; // null=unprobed, true=keyless official candles reachable
+    this.pollTimer = null;
+    this.pollMs = config.upstox.pollMs;
+    this.failStreak = 0;
+    this.dayCache = new Map(); // symbol → { prevClose, at }
+    this.reprobeTimer = null;  // retry boot probe when Upstox rate-limits our IP
+    this.reprobeDelayMs = 0;
+    this.lastRetryAfterSec = 0;
   }
 
   get configured() {
@@ -94,6 +114,7 @@ class UpstoxProvider extends EventEmitter {
       lastTickAt: this.lastTickAt,
       symbols: this.subscribed.size,
       masterSource: this.masterSource,
+      publicMode: this.publicOk === true,
       tokenSource: this.effectiveToken()?.source || null,
       oauthConfigured: Boolean(config.upstox.clientId && config.upstox.clientSecret),
     };
@@ -208,7 +229,28 @@ class UpstoxProvider extends EventEmitter {
 
   /** getQuote(symbol) — required facade function. */
   async getQuote(symbol) {
-    if (!this.configured || !this.applyAuth()) throw new Error('upstox not configured');
+    if (!this.configured) {
+      // keyless quote = latest public 1-minute candle + previous close
+      const key = this.resolve(symbol);
+      if (!key || this.publicOk === false) throw new Error('upstox not configured and public feed unavailable');
+      const candles = await this.publicFetch(key, '1minute', true);
+      if (!candles.length) throw new Error('no public candles');
+      const asc = candles.slice().reverse();
+      const last = asc[asc.length - 1];
+      const price = num(last[4]);
+      let dayOpen = num(asc[0][1]); let dayHigh = -Infinity; let dayLow = Infinity; let vol = 0;
+      for (const c of asc) { dayHigh = Math.max(dayHigh, num(c[2]) ?? -Infinity); dayLow = Math.min(dayLow, num(c[3]) ?? Infinity); vol += num(c[5]) || 0; }
+      const prevClose = (await this.dayStats(symbol).catch(() => null))?.prevClose ?? null;
+      const change = prevClose != null ? Math.round((price - prevClose) * 1e6) / 1e6 : null;
+      return {
+        provider: 'upstox', transport: 'public-poll', symbol: String(symbol).toUpperCase(), instrumentKey: key,
+        price, change, changePct: prevClose ? Math.round(((price - prevClose) / prevClose) * 100 * 1000) / 1000 : null,
+        open: dayOpen, high: dayHigh === -Infinity ? null : dayHigh, low: dayLow === Infinity ? null : dayLow,
+        prevClose, volume: vol, bid: null, ask: null, bidQty: null, askQty: null,
+        ltt: new Date(last[0]).getTime(), at: Date.now(),
+      };
+    }
+    if (!this.applyAuth()) throw new Error('upstox not configured');
     const key = this.resolve(symbol);
     if (!key) throw new Error(`no instrument key for ${symbol}`);
     const api = new U.MarketQuoteV3Api();
@@ -245,7 +287,26 @@ class UpstoxProvider extends EventEmitter {
 
   /** getHistoricalCandles(symbol, timeframe) — required facade function. */
   async getHistoricalCandles(symbol, timeframe = '5m', limit = 500) {
-    if (!this.configured || !this.applyAuth()) throw new Error('upstox not configured');
+    const key0 = this.resolve(symbol);
+    if (!this.configured) {
+      if (!key0 || this.publicOk === false) throw new Error('upstox not configured and public feed unavailable');
+      const tf = PUB_SOURCE[timeframe] ? timeframe : '5m';
+      const [iv, mult] = PUB_SOURCE[tf];
+      const mapC = (rows) => rows.map((c) => ({ t: new Date(c[0]).getTime(), o: num(c[1]), h: num(c[2]), l: num(c[3]), c: num(c[4]), v: num(c[5]) || 0 })).sort((a, b) => a.t - b.t);
+      // Dated endpoint = finalised sessions only; the intraday endpoint carries
+      // the live current session. Merge them so charts include today.
+      let candles = mapC(await this.publicFetch(key0, iv));
+      if (iv.endsWith('minute')) {
+        const today = mapC(await this.publicFetch(key0, iv, true));
+        if (today.length) {
+          const cutoff = today[0].t;
+          candles = [...candles.filter((c) => c.t < cutoff), ...today];
+        }
+      }
+      if (mult > 1) candles = aggregate(candles, PUB_TF_MS[tf]);
+      return candles.slice(-limit);
+    }
+    if (!this.applyAuth()) throw new Error('upstox not configured');
     const key = this.resolve(symbol);
     if (!key) throw new Error(`no instrument key for ${symbol}`);
     const tf = INTERVALS[timeframe] ? timeframe : '5m';
@@ -262,7 +323,11 @@ class UpstoxProvider extends EventEmitter {
   /* ── WebSocket market feed (official SDK streamer, protobuf) ──────────── */
   subscribeToMarketData(symbols) {
     const list = symbols.map((s) => String(s).toUpperCase());
-    if (!this.configured) { this.setState('unconfigured', 'Upstox credentials missing'); return false; }
+    if (!this.configured) {
+      if (this.publicOk) { this.registerPublic(list); this.startPublicPoll(); return true; }
+      if (this.publicOk === null) { this.probePublic().then((okc) => { if (okc) { this.registerPublic(list); this.startPublicPoll(); } }); return false; }
+      return false;
+    }
     if (!this.streamer) this.startStream();
     const keys = [];
     for (const sym of list) {
@@ -278,6 +343,15 @@ class UpstoxProvider extends EventEmitter {
     return keys.length > 0;
   }
 
+  registerPublic(list) {
+    for (const sym of list) {
+      const key = this.resolve(sym);
+      if (!key) continue;
+      if (!this.subscribed.has(key)) this.subscribed.set(key, new Set());
+      this.subscribed.get(key).add(sym);
+    }
+  }
+
   unsubscribeFromMarketData(symbols) {
     const keys = [];
     for (const sym of symbols.map((s) => String(s).toUpperCase())) {
@@ -287,6 +361,7 @@ class UpstoxProvider extends EventEmitter {
     }
     if (keys.length && this.streamer) { try { this.streamer.unsubscribe(keys, 'full'); } catch { /* closing */ } }
     if (!this.subscribed.size && this.streamer) { this.stopStream(); }
+    if (!this.subscribed.size) this.stopPublicPoll();
     return keys;
   }
 
@@ -378,10 +453,6 @@ class UpstoxProvider extends EventEmitter {
     // Decoded per Upstox MarketDataFeedV3.proto:
     //   Feed.fullFeed.(marketFF|indexFF){ ltpc, marketLevel.bidAskQuote[Quote],
     //     marketOHLC.ohlc[OHLC{interval,open,high,low,close,vol}], vtt }
-    if (!this._dbgOnce) {
-      this._dbgOnce = true;
-      this.emit('debug', `first msg type=${typeof msg} keys=${Object.keys(msg || {})} feeds=${Object.keys(msg?.feeds || {})} sample=${JSON.stringify(msg?.feeds || {}).slice(0, 220)}`);
-    }
     const feeds = msg?.feeds || {};
     let any = false;
     for (const [key, feed] of Object.entries(feeds)) {
@@ -436,6 +507,155 @@ class UpstoxProvider extends EventEmitter {
     this.watchdog.unref?.();
   }
 
+  /* ── keyless public feed (official REST candles, no auth required) ──────
+   * Upstox serves /v2/historical-candle[…] without a token. During market
+   * hours the current 1-minute candle is the live trade print, so polling it
+   * (gently: ≤10 symbols, 10s, backoff on 429, off on 401/403) gives real NSE
+   * prices with zero credentials. The authenticated WebSocket takes over
+   * automatically the moment a token exists. Never presented as WS-live. */
+  async publicFetch(key, interval, intraday = false) {
+    const date = new Date().toISOString().slice(0, 10);
+    const url = `${config.upstox.apiBase}/v2/historical-candle/${intraday ? 'intraday/' : ''}${encodeURIComponent(key)}/${interval}${intraday ? '' : `/${date}`}`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    if (r.status === 429) {
+      throw Object.assign(new Error('public feed rate-limited'), { code: 429, retryAfter: Number(r.headers.get('retry-after')) || 0 });
+    }
+    if (r.status === 401 || r.status === 403) throw Object.assign(new Error(`public feed rejected (${r.status})`), { code: r.status, fatal: true });
+    if (!r.ok) throw new Error(`public feed ${r.status}`);
+    const j = await r.json();
+    return j?.data?.candles || [];
+  }
+
+  async probePublic() {
+    try {
+      const key = this.resolve('RELIANCE') || CURATED.RELIANCE;
+      const candles = await this.publicFetch(key, '1minute', true);
+      this.publicOk = Array.isArray(candles) && candles.length > 0;
+    } catch (e) {
+      this.publicOk = false;
+      this.lastRetryAfterSec = e.code === 429 ? (e.retryAfter || 0) : 0;
+      if (e.fatal) { this.setState('error', e.message); return false; } // 401/403 — endpoint gated, don't hammer it
+    }
+    if (!this.publicOk && !this.configured && !this.effectiveToken()) this.scheduleReprobe(this.lastRetryAfterSec);
+    return this.publicOk;
+  }
+
+  /**
+   * Upstox rate-limits per IP — a 429 (or transient network blip) at boot must
+   * not latch "public feed unreachable" forever. Retry with backoff
+   * (30s → 60s → … capped at 5 min) until the feed answers or credentials land.
+   */
+  scheduleReprobe(retryAfterSec = 0) {
+    if (this.reprobeTimer || this.publicOk) return;
+    const base = this.reprobeDelayMs ? this.reprobeDelayMs * 2 : 30_000;
+    const delay = Math.min(Math.max(base, (Number(retryAfterSec) || 0) * 1000), 600_000);
+    this.reprobeDelayMs = delay;
+    this.reprobeTimer = setTimeout(async () => {
+      this.reprobeTimer = null;
+      const ok = await this.probePublic();
+      if (ok) {
+        this.reprobeDelayMs = 0;
+        this.failStreak = 0;
+        if (!this.configured && !this.effectiveToken()) {
+          this.setState('market_closed',
+            'keyless public feed reachable — LIVE during NSE hours; connect an Upstox app for the WebSocket feed');
+          this.stopPublicPoll();
+          this.startPublicPoll();
+        }
+        console.log('[upstox] public feed reachable after retry — keyless polling mode active');
+      }
+    }, delay);
+    this.reprobeTimer.unref?.();
+  }
+
+  cancelReprobe() {
+    if (this.reprobeTimer) { clearTimeout(this.reprobeTimer); this.reprobeTimer = null; }
+    this.reprobeDelayMs = 0;
+  }
+
+  async dayStats(symbol) {
+    const cached = this.dayCache.get(symbol);
+    if (cached && Date.now() - cached.at < 600_000) return cached;
+    const key = this.resolve(symbol);
+    const candles = await this.publicFetch(key, 'day');
+    // newest-first; today's daily candle only appears after EOD finalisation,
+    // so the previous close is [0] while [0] is an earlier session, else [1].
+    const istToday = this.istNow().toISOString().slice(0, 10);
+    const firstDate = String(candles[0]?.[0] || '').slice(0, 10);
+    const prevClose = num(firstDate && firstDate < istToday ? candles[0]?.[4] : candles[1]?.[4] ?? candles[0]?.[4]);
+    const out = { prevClose, at: Date.now() };
+    this.dayCache.set(symbol, out);
+    return out;
+  }
+
+  startPublicPoll() {
+    if (this.pollTimer || this.configured) return;
+    const run = async () => {
+      const symbols = [...new Set([...this.subscribed.values()].flatMap((s) => [...s]))].slice(0, 10);
+      if (!symbols.length) return;
+      let ok = 0;
+      for (const sym of symbols) {
+        const key = this.resolve(sym);
+        if (!key) continue;
+        try {
+          const candles = await this.publicFetch(key, '1minute', true);
+          if (!candles.length) continue;
+          ok++;
+          const asc = candles.slice().reverse(); // oldest → newest
+          const last = asc[asc.length - 1];
+          const price = num(last[4]);
+          if (price == null) continue;
+          let dayOpen = num(asc[0][1]); let dayHigh = -Infinity; let dayLow = Infinity; let vol = 0;
+          for (const c of asc) { dayHigh = Math.max(dayHigh, num(c[2]) ?? -Infinity); dayLow = Math.min(dayLow, num(c[3]) ?? Infinity); vol += num(c[5]) || 0; }
+          const day = await this.dayStats(sym).catch(() => ({ prevClose: null }));
+          const prevClose = day.prevClose;
+          const change = prevClose != null ? Math.round((price - prevClose) * 1e6) / 1e6 : null;
+          this.emit('tick', {
+            provider: 'upstox', transport: 'public-poll',
+            symbol: sym, instrumentKey: key,
+            price, change,
+            changePct: prevClose ? Math.round(((price - prevClose) / prevClose) * 100 * 1000) / 1000 : null,
+            open: dayOpen, high: dayHigh === -Infinity ? null : dayHigh, low: dayLow === Infinity ? null : dayLow,
+            prevClose, volume: vol,
+            bid: null, ask: null, bidQty: null, askQty: null,
+            ltt: new Date(last[0]).getTime(),
+            at: Date.now(),
+          });
+        } catch (e) {
+          if (e.fatal) { this.publicOk = false; this.stopPublicPoll(); this.setState('error', e.message); return; }
+          if (e.code === 429) {
+            // Upstox rate-limits per IP: back off (honouring Retry-After when sent) and resume later.
+            const retryAfterMs = Number(e.retryAfter) > 0 ? Number(e.retryAfter) * 1000 : 0;
+            this.pollMs = Math.min(Math.max(this.pollMs * 2, retryAfterMs), 300_000);
+            this.restartPoll();
+            return;
+          }
+        }
+      }
+      this.failStreak = ok ? 0 : this.failStreak + 1;
+      if (ok && this.pollMs !== config.upstox.pollMs) { this.pollMs = config.upstox.pollMs; this.restartPoll(); }
+      if (this.failStreak >= 3) this.setState('error', 'public feed unreachable');
+      else if (ok && this.marketOpen()) this.setState('live', 'Upstox public 1-minute feed (keyless)');
+      else if (ok && !this.marketOpen()) this.setState('market_closed', 'NSE session closed — showing last traded prices');
+    };
+    let inFlight = false;
+    this.pollTimer = setInterval(() => {
+      if (inFlight) return; // never overlap cycles — overlapping polls are what trips the per-IP budget
+      inFlight = true;
+      run().catch((e) => console.error('[upstox] poll failed:', e.message)).finally(() => { inFlight = false; });
+    }, this.pollMs);
+    this.pollTimer.unref?.();
+    run().catch(() => {});
+  }
+
+  restartPoll() {
+    if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; this.startPublicPoll(); }
+  }
+
+  stopPublicPoll() {
+    if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
+  }
+
   /* ── OAuth2 (server-side handshake; frontend never sees the secret) ───── */
   authorizeUrl() {
     if (!config.upstox.clientId) throw new Error('UPSTOX_CLIENT_ID/SECRET not configured');
@@ -458,6 +678,9 @@ class UpstoxProvider extends EventEmitter {
     if (!accessToken) throw new Error('token exchange returned no access_token');
     this.token = { accessToken, expiresAt: Date.now() + 23 * 3600_000, source: 'oauth' }; // Upstox tokens expire daily
     this.applyAuth();
+    this.cancelReprobe();
+    this.publicOk = false; // keyed WebSocket feed supersedes keyless polling
+    this.stopPublicPoll();
     await this.loadMaster();
     if (this.subscribed.size) this.subscribeToMarketData([...new Set([...this.subscribed.values()].flatMap((s) => [...s]))]);
     return { connected: true, expiresAt: this.token.expiresAt };
@@ -465,11 +688,19 @@ class UpstoxProvider extends EventEmitter {
 
   async init() {
     if (!config.upstox.clientId || !config.upstox.clientSecret) {
-      this.setState('unconfigured', 'UPSTOX_CLIENT_ID / UPSTOX_CLIENT_SECRET not set');
+      const ok = await this.probePublic();
+      await this.loadMaster();
+      this.setState(ok ? 'market_closed' : 'unconfigured',
+        ok ? 'keyless public feed reachable — LIVE during NSE hours; connect an Upstox app for the WebSocket feed'
+           : 'UPSTOX_CLIENT_ID / UPSTOX_CLIENT_SECRET not set and public feed unreachable');
       return;
     }
     if (!this.effectiveToken()) {
-      this.setState('unconfigured', 'no access token — paste UPSTOX_ACCESS_TOKEN or connect via OAuth');
+      const ok = await this.probePublic();
+      await this.loadMaster();
+      this.setState(ok ? 'market_closed' : 'unconfigured',
+        ok ? 'keyless public feed reachable — LIVE during NSE hours; add a token for the WebSocket feed'
+           : 'no access token and public feed unreachable — paste UPSTOX_ACCESS_TOKEN or connect via OAuth');
       return;
     }
     this.applyAuth();

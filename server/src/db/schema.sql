@@ -130,8 +130,7 @@ alter table orders drop constraint if exists orders_status_check;
 alter table orders add constraint orders_status_check check (status in ('filled','rejected','cancelled','pending'));
 alter table orders drop constraint if exists orders_opened_by_check;
 alter table orders add constraint orders_opened_by_check check (opened_by in ('user','bot','pending'));
-alter table positions drop constraint if exists positions_opened_by_check;
-alter table positions add constraint positions_opened_by_check check (opened_by in ('user','bot','pending'));
+
 
 create table if not exists positions (
   id            uuid primary key default uuid_generate_v4(),
@@ -356,3 +355,7 @@ grant usage, select on all sequences in schema public to tm_app;
 alter default privileges in schema public grant select, insert, update, delete on tables to tm_app;
 
 -- Sequences aren't used (uuid defaults), but keep this harmless.
+
+-- (appended last: alters must run after every create table)
+alter table positions drop constraint if exists positions_opened_by_check;
+alter table positions add constraint positions_opened_by_check check (opened_by in ('user','bot','pending'));

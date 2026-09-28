@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { optionalAuth, asyncH, notFound, badRequest, requireAuth, toNumber } from '../middleware.js';
-import { listInstruments, getInstrument, MARKETS } from '../services/instruments.js';
+import { listInstruments, getInstrument, INSTRUMENTS, MARKETS } from '../services/instruments.js';
 import { quote, candles, tickers, history, engineInfo } from '../services/marketEngine.js';
 import marketData from '../services/marketData.js';
 import { getNews, newsSources } from '../services/news.js';

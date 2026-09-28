@@ -51,7 +51,10 @@ ok(['● LIVE', '● DELAYED', '● MARKET CLOSED', '● CONNECTION ERROR', 'PAP
 const strip = await frame.locator('[data-testid="quote-strip"]').textContent();
 ok(strip.includes('Prev close') && strip.includes('Bid') && strip.includes('Ask') && strip.includes('Volume'), 'quote strip shows O/H/L, prev close, volume, bid/ask');
 const prov = await (await fetch('http://localhost:5000/api/provider/upstox/status')).json();
-ok(prov.state === 'unconfigured' && !JSON.stringify(prov).includes('secret'), `provider status honest + secret-free (${prov.state})`);
+const publicMode = prov.publicMode === true; // keyless official feed currently reachable
+const secretFree = !JSON.stringify(prov).match(/secret|token["']?\s*:\s*["'][A-Za-z0-9]/i);
+ok(secretFree && (publicMode ? ['market_closed', 'live'].includes(prov.state) : prov.state === 'unconfigured'),
+  `provider status honest + secret-free (${prov.state}, publicMode=${publicMode})`);
 const udf = await (await fetch('http://localhost:5000/udf/config')).json();
 ok(Array.isArray(udf.supported_resolutions) && udf.supported_resolutions.includes('240'), 'UDF config serves 9 resolutions');
 const udfh = await (await fetch('http://localhost:5000/udf/history?symbol=RELIANCE&resolution=5&from=' + (Math.floor(Date.now()/1000) - 86400) + '&to=' + Math.floor(Date.now()/1000))).json();
@@ -59,6 +62,8 @@ ok(udfh.s === 'ok' && udfh.t.length > 10, `UDF history ok (${udfh.t.length} bars
 await frame.locator('[data-testid="terminal-feed"]').waitFor({ timeout: 12000 });
 const feedLabel = (await frame.locator('[data-testid="terminal-feed"]').textContent()).trim();
 ok(feedLabel.length > 0, `feed chip: "${feedLabel}"`);
+if (publicMode) ok(feedLabel !== 'PAPER VENUE', `RELIANCE routed to real Upstox feed, not paper (${feedLabel})`);
+else ok(feedLabel === 'PAPER VENUE', `public feed unreachable/rate-limited — honest PAPER VENUE label, no fake LIVE (${feedLabel})`);
 
 // paper banner
 const banner = (await frame.locator('[data-testid="paper-banner"]').textContent()).trim();
