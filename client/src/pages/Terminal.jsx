@@ -10,9 +10,10 @@
  * Paper trading only: virtual cash, virtual fills. No real broker call is
  * ever made from this page, and every surface says so.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Market, Trade } from '../lib/api.js';
-import { useLiveQuotes, useSocketStatus } from '../lib/marketSocket.js';
+import { useLiveQuotes, useSocketStatus, useProviderStatus } from '../lib/marketSocket.js';
+import { mountTradingViewChart } from '../lib/tvDatafeed.js';
 import ChartPro from '../components/ChartPro.jsx';
 import Watchlist from '../components/Watchlist.jsx';
 import { tvSymbol } from '../components/TradingView.jsx';
@@ -29,6 +30,8 @@ export default function Terminal() {
   const [focusSearch, setFocusSearch] = useState(false);
   const [tab, setTab] = useState('positions');
   const [notice, setNotice] = useState(null);
+  const [tvMounted, setTvMounted] = useState(false);
+  const tvHostRef = useRef(null);
 
   const { data: inst } = usePoll(() => Market.instruments('all'), 120_000, []);
   const instruments = useMemo(() => (inst?.instruments || []).map((i) => ({ ...i, exchange: exchangeOf(i) })), [inst]);
@@ -37,6 +40,7 @@ export default function Terminal() {
   const { quotes } = useLiveQuotes(symbol ? [symbol] : []);
   const q = quotes[symbol];
   const status = useSocketStatus();
+  const provider = useProviderStatus();
 
   /* ── suggestions for the header search ── */
   const suggestions = useMemo(() => {
@@ -63,6 +67,14 @@ export default function Terminal() {
   const closed = usePoll(() => Trade.positions('closed'), 15000, [bump]);
   const portfolio = usePoll(() => Trade.portfolio(), 10000, [bump]);
 
+  // Official TradingView Charting Library mounts here when licensed in;
+  // otherwise the host stays hidden and ChartPro renders the same datafeed.
+  useEffect(() => {
+    const w = mountTradingViewChart(tvHostRef.current, { symbol, interval: '5m' });
+    setTvMounted(Boolean(w));
+    return () => { try { w?.remove(); } catch { /* not mounted */ } };
+  }, [symbol]);
+
   useEffect(() => {
     if (!notice) return undefined;
     const t = setTimeout(() => setNotice(null), 5000);
@@ -73,7 +85,6 @@ export default function Terminal() {
     ? `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbol(current))}`
     : 'https://www.tradingview.com/chart/';
 
-  const sessionLabel = q?.feed?.marketOpen === false ? 'MARKET CLOSED' : q?.feed?.marketOpen ? 'MARKET OPEN' : null;
 
   return (
     <div className="space-y-3">
@@ -101,29 +112,15 @@ export default function Terminal() {
           ) : null}
         </div>
 
-        {q ? (
-          <div className="flex items-center gap-2 text-sm" data-testid="terminal-quote">
-            <span className="font-bold tabular-nums">{q.price.toFixed(2)}</span>
-            <span className={`font-semibold tabular-nums ${q.changePct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {q.changePct >= 0 ? '+' : ''}{q.changePct.toFixed(2)}%
-            </span>
-            <span className="hidden md:inline text-xs text-slate-500 tabular-nums">
-              Day {q.low?.toFixed(2)}–{q.high?.toFixed(2)}
-            </span>
-          </div>
-        ) : null}
-
         <span className={`text-[10px] px-2 py-1 rounded-lg font-bold ${status === 'live' ? 'bg-emerald-500/15 text-emerald-600' : status === 'closed' ? 'bg-slate-500/10 text-slate-500' : 'bg-amber-500/15 text-amber-600'}`} data-testid="terminal-stream">
-          {status === 'live' ? '● LIVE STREAM' : status === 'closed' ? 'STREAM OFFLINE' : 'RECONNECTING…'}
+          {status === 'live' ? '● WS CONNECTED' : status === 'closed' ? 'WS OFFLINE' : 'WS RECONNECTING…'}
+        </span>
+        <span className={`text-[10px] px-2 py-1 rounded-lg font-bold ${STATE_STYLE[stateOf(q, provider)]}`} data-testid="terminal-state">
+          {STATE_TEXT[stateOf(q, provider)]}
         </span>
         {q?.feed ? (
-          <span className={`text-[10px] px-2 py-1 rounded-lg font-bold ${q.feed.latency === 'live' ? 'bg-emerald-500/15 text-emerald-600' : q.feed.latency === 'delayed' ? 'bg-amber-500/15 text-amber-600' : 'bg-slate-500/10 text-slate-500'}`} data-testid="terminal-feed">
+          <span className={`text-[10px] px-2 py-1 rounded-lg font-bold ${q.feed.latency === 'live' ? 'bg-emerald-500/15 text-emerald-600' : q.feed.latency === 'delayed' ? 'bg-amber-500/15 text-amber-600' : 'bg-slate-500/10 text-slate-500'}`} data-testid="terminal-feed" title={q.feed.reason || provider?.reason || ''}>
             {q.feed.label}
-          </span>
-        ) : null}
-        {sessionLabel ? (
-          <span className={`text-[10px] px-2 py-1 rounded-lg font-bold ${sessionLabel === 'MARKET OPEN' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-slate-500/10 text-slate-500'}`} data-testid="terminal-session">
-            {sessionLabel}
           </span>
         ) : null}
 
@@ -138,6 +135,23 @@ export default function Terminal() {
         </a>
       </div>
 
+      {/* full quote strip — every field the provider gives us */}
+      {q ? (
+        <div data-testid="quote-strip" className="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-11 gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2">
+          <QF label="LTP" value={q.price?.toFixed(2)} strong tone={q.changePct} />
+          <QF label="Change" value={`${q.change >= 0 ? '+' : ''}${q.change?.toFixed(2)}`} tone={q.change} />
+          <QF label="Change %" value={`${q.changePct >= 0 ? '+' : ''}${q.changePct?.toFixed(2)}%`} tone={q.changePct} />
+          <QF label="Open" value={q.open?.toFixed(2)} />
+          <QF label="High" value={q.high?.toFixed(2)} />
+          <QF label="Low" value={q.low?.toFixed(2)} />
+          <QF label="Prev close" value={q.prevClose?.toFixed(2)} />
+          <QF label="Volume" value={q.volume != null ? Math.round(q.volume).toLocaleString('en-IN') : '—'} />
+          <QF label="Bid" value={q.bid != null ? q.bid.toFixed(2) : '—'} />
+          <QF label="Ask" value={q.ask != null ? q.ask.toFixed(2) : '—'} />
+          <QF label="Market" value={q.feed?.marketOpen ? 'OPEN' : 'CLOSED'} tone={q.feed?.marketOpen ? 1 : -1} />
+        </div>
+      ) : null}
+
       {notice ? (
         <div data-testid="terminal-notice" className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border ${notice.kind === 'error' ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
           <Icon name={notice.kind === 'error' ? 'alert' : 'check'} className="h-4 w-4" />
@@ -151,11 +165,15 @@ export default function Terminal() {
           <Watchlist instruments={instruments} active={symbol} onSelect={(s) => { setSymbol(s); setBump((b) => b + 1); }} />
         </div>
         <div className="min-w-0">
-          <ChartPro symbol={symbol} name={current?.name} feed={q?.feed} height={420} />
+          <div ref={tvHostRef} data-testid="tv-chart-host" className={tvMounted ? 'rounded-2xl overflow-hidden border border-slate-200' : 'hidden'} style={tvMounted ? { height: 420 } : undefined} />
+          {!tvMounted ? <ChartPro symbol={symbol} name={current?.name} feed={q?.feed} height={420} /> : null}
           <p className="mt-1.5 text-[10.5px] text-slate-400">
             Prices and candles stream from the same provider facade.{' '}
             {q?.feed?.latency === 'live' ? 'Live provider feed.' : q?.feed?.latency === 'delayed' ? 'Delayed provider reference.' : 'Simulated paper-venue prices — not real quotes.'}{' '}
-            <a className="underline hover:text-slate-600" href={tvChartHref} target="_blank" rel="noreferrer noopener">Open the full TradingView chart</a> for the real exchange listing.
+            <a className="underline hover:text-slate-600" href={tvChartHref} target="_blank" rel="noreferrer noopener">Open the full TradingView chart</a> for the real exchange listing.{' '}
+            <span data-testid="tv-lib-note">{typeof window !== 'undefined' && window.TradingView?.widget
+              ? 'Official Charting Library detected — mounted on the same backend datafeed.'
+              : 'TradingView Charting Library not bundled here; this built-in chart renders the same backend datafeed (UDF + WS) and is drop-in ready for the licensed library.'}</span>
           </p>
         </div>
         <OrderPanel symbol={symbol} inst={current} price={q?.price} onDone={(msg, kind) => { setNotice({ text: msg, kind: kind || 'ok' }); setBump((b) => b + 1); }} />
@@ -166,6 +184,38 @@ export default function Terminal() {
     </div>
   );
 }
+
+/* Four-state honesty indicator (spec): LIVE only while the backend is
+ * actually receiving provider ticks. */
+function stateOf(q, provider) {
+  const lat = q?.feed?.latency;
+  if (lat === 'live') return 'live';
+  if (lat === 'delayed') return 'delayed';
+  if (lat === 'closed') return 'closed';
+  if (lat === 'error') return 'error';
+  return provider?.state === 'live' ? 'live' : provider?.state === 'market_closed' ? 'closed' : provider?.state === 'error' ? 'error' : provider?.state === 'unconfigured' ? 'paper' : 'paper';
+}
+const STATE_STYLE = {
+  live: 'bg-emerald-500/15 text-emerald-600',
+  delayed: 'bg-amber-500/15 text-amber-600',
+  closed: 'bg-slate-500/10 text-slate-500',
+  error: 'bg-rose-500/15 text-rose-600',
+  paper: 'bg-slate-500/10 text-slate-500',
+};
+const STATE_TEXT = {
+  live: '● LIVE',
+  delayed: '● DELAYED',
+  closed: '● MARKET CLOSED',
+  error: '● CONNECTION ERROR',
+  paper: 'PAPER VENUE · PROVIDER OFF',
+};
+
+const QF = ({ label, value, tone, strong }) => (
+  <div className="min-w-0">
+    <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400 truncate">{label}</p>
+    <p className={`text-[12px] font-bold tabular-nums truncate ${strong ? '' : tone != null ? (Number(tone) >= 0 ? 'text-emerald-600' : 'text-rose-600') : 'text-slate-700'}`}>{value ?? '—'}</p>
+  </div>
+);
 
 /* ── order panel ───────────────────────────────────────────────── */
 function OrderPanel({ symbol, inst, price, onDone }) {

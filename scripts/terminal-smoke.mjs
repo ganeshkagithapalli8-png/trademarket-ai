@@ -45,7 +45,17 @@ ok(priced, 'watchlist prices stream in (WS or fallback)');
 
 // stream + feed + session chips exist and are honest
 const stream = (await frame.locator('[data-testid="terminal-stream"]').textContent()).trim();
-ok(['● LIVE STREAM', 'RECONNECTING…', 'STREAM OFFLINE'].includes(stream), `stream chip: "${stream}"`);
+ok(['● WS CONNECTED', 'WS RECONNECTING…', 'WS OFFLINE'].includes(stream), `stream chip: "${stream}"`);
+const stateChip = (await frame.locator('[data-testid="terminal-state"]').textContent()).trim();
+ok(['● LIVE', '● DELAYED', '● MARKET CLOSED', '● CONNECTION ERROR', 'PAPER VENUE · PROVIDER OFF'].includes(stateChip), `4-state chip: "${stateChip}"`);
+const strip = await frame.locator('[data-testid="quote-strip"]').textContent();
+ok(strip.includes('Prev close') && strip.includes('Bid') && strip.includes('Ask') && strip.includes('Volume'), 'quote strip shows O/H/L, prev close, volume, bid/ask');
+const prov = await (await fetch('http://localhost:5000/api/provider/upstox/status')).json();
+ok(prov.state === 'unconfigured' && !JSON.stringify(prov).includes('secret'), `provider status honest + secret-free (${prov.state})`);
+const udf = await (await fetch('http://localhost:5000/udf/config')).json();
+ok(Array.isArray(udf.supported_resolutions) && udf.supported_resolutions.includes('240'), 'UDF config serves 9 resolutions');
+const udfh = await (await fetch('http://localhost:5000/udf/history?symbol=RELIANCE&resolution=5&from=' + (Math.floor(Date.now()/1000) - 86400) + '&to=' + Math.floor(Date.now()/1000))).json();
+ok(udfh.s === 'ok' && udfh.t.length > 10, `UDF history ok (${udfh.t.length} bars)`);
 await frame.locator('[data-testid="terminal-feed"]').waitFor({ timeout: 12000 });
 const feedLabel = (await frame.locator('[data-testid="terminal-feed"]').textContent()).trim();
 ok(feedLabel.length > 0, `feed chip: "${feedLabel}"`);

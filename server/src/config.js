@@ -51,6 +51,14 @@ export const config = {
     kiteAccessToken: process.env.KITE_ACCESS_TOKEN || '',
   },
 
+  upstox: {
+    clientId: process.env.UPSTOX_CLIENT_ID || '',
+    clientSecret: process.env.UPSTOX_CLIENT_SECRET || '',
+    accessToken: process.env.UPSTOX_ACCESS_TOKEN || '',
+    redirectUri: process.env.UPSTOX_REDIRECT_URI || 'http://localhost:5000/api/provider/upstox/callback',
+    apiBase: process.env.UPSTOX_API_BASE || 'https://api.upstox.com', // test override only
+    feedWs: process.env.UPSTOX_FEED_WS || '', // test-only WS override (SDK hardcodes the prod feed URL)
+  },
   safety: {
     // Hard rail. There is no order-routing code in this repository at all.
     paperTradingOnly: bool(process.env.PAPER_TRADING_ONLY, true),

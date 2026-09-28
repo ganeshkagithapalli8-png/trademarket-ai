@@ -18,6 +18,8 @@ class MarketSocket {
     this.quoteSymbols = new Map(); // symbol → Set<cb>
     this.candleKeys = new Map(); // `${symbol}|${tf}` → Set<cb>
     this.statusListeners = new Set();
+    this.provider = null; // upstox status object from the server
+    this.providerListeners = new Set();
     this.backoff = 500;
     this.retryTimer = null;
     this.manualClose = false;
@@ -49,6 +51,8 @@ class MarketSocket {
     ws.onmessage = (ev) => {
       let msg;
       try { msg = JSON.parse(ev.data); } catch { return; }
+      if (msg.t === 'hello' && msg.upstox) this.setProvider(msg.upstox);
+      if (msg.t === 'status' && msg.upstox) this.setProvider(msg.upstox);
       if (msg.t === 'tick') {
         const cbs = this.quoteSymbols.get(msg.q?.symbol);
         if (cbs) cbs.forEach((fn) => fn(msg.q));
@@ -110,6 +114,17 @@ class MarketSocket {
     };
   }
 
+  setProvider(st) {
+    this.provider = st;
+    this.providerListeners.forEach((fn) => fn(st));
+  }
+
+  onProvider(fn) {
+    this.providerListeners.add(fn);
+    if (this.provider) fn(this.provider);
+    return () => this.providerListeners.delete(fn);
+  }
+
   onStatus(fn) {
     this.statusListeners.add(fn);
     return () => this.statusListeners.delete(fn);
@@ -162,6 +177,13 @@ export function useLiveQuotes(symbols) {
   }, [status, key]);
 
   return { quotes, status };
+}
+
+/** React hook: server-reported Upstox provider status (live/closed/error/unconfigured). */
+export function useProviderStatus() {
+  const [st, setSt] = useState(marketSocket.provider);
+  useEffect(() => marketSocket.onProvider(setSt), []);
+  return st;
 }
 
 /** React hook: connection status only. */

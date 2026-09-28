@@ -111,3 +111,59 @@ client/   user-facing React app — no secrets, ever
 server/   Express API, services, migrations, RLS schema
 scripts/  e2e-test.mjs · ui-smoke.mjs · find-overflow.mjs · deploy/
 ```
+
+## Live market data (Upstox, NSE/BSE)
+
+Market data flows one way only: **NSE/BSE → Upstox → this backend → WebSocket/REST → frontend**.
+The frontend never holds a provider key; it only talks to `/api/...`, `/ws/market` and `/udf/...`.
+
+### 1 · Configure (server-side only)
+
+```bash
+# server/.env — never commit, never serve
+UPSTOX_CLIENT_ID=your_client_id
+UPSTOX_CLIENT_SECRET=your_client_secret     # optional if you use the OAuth flow
+UPSTOX_ACCESS_TOKEN=your_daily_access_token # optional if you use the OAuth flow
+UPSTOX_REDIRECT_URI=https://your-api-host/api/provider/upstox/callback
+```
+
+Two ways to obtain an access token (Upstox tokens expire daily):
+
+* **Pasted token** — set `UPSTOX_ACCESS_TOKEN` from the Upstox developer console, restart.
+* **In-app OAuth** — with client id+secret set, open
+  `GET /api/provider/upstox/auth-url` (authenticated), follow the redirect to
+  Upstox's dialog, and land on `/api/provider/upstox/callback`. The exchanged
+  token is stored **server-side in memory only** and used until expiry.
+
+### 2 · Backend service surface (`server/src/services/marketData.js`)
+
+`getQuote(symbol)` · `getHistoricalCandles(symbol, timeframe)` ·
+`subscribeToMarketData(symbols)` · `unsubscribeFromMarketData(symbols)` —
+backed by `services/providers/upstox.js` (official `upstox-js-sdk`: REST v3
+quotes/history + `MarketDataStreamerV3` protobuf WebSocket feed), with
+reconnect, 429 backoff, a no-tick watchdog and an instrument-master download.
+
+### 3 · Frontend
+
+* `/ws/market` streams ticks + server-aggregated candles (1m…1M); the chart
+  updates the live candle in place and rolls over on timeframe expiry.
+* Status chip shows exactly one of `● LIVE · ● DELAYED · ● MARKET CLOSED ·
+  ● CONNECTION ERROR`; LIVE only while provider ticks are actually arriving.
+* With no Upstox credentials the app stays on the clearly labelled paper
+  venue — simulated prices are never presented as live quotes.
+
+### 4 · TradingView (official paths only)
+
+* `GET /udf/*` implements TradingView's UDF datafeed protocol over **our**
+  backend, and `client/src/lib/tvDatafeed.js` is the JS-API datafeed adapter
+  (with `subscribeBars` bridged to the WebSocket). Drop the licensed Charting
+  Library bundle into the client and it mounts automatically; until then the
+  built-in ChartPro renders the same datafeed.
+* "Open TradingView" / per-symbol chart links open tradingview.com in a new
+  tab. We never scrape TradingView and never treat its widgets as a data API.
+
+### 5 · Paper trading only
+
+Orders, positions and P&L are virtual. No broker execution exists in this
+codebase; a future broker adapter must be a separate, explicitly authorised
+module.

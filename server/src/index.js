@@ -21,6 +21,9 @@ import contentRoutes from './routes/content.js';
 import learnRoutes from './routes/learn.js';
 import botRoutes from './routes/bot.js';
 import aiRoutes from './routes/ai.js';
+import providerRoutes from './routes/provider.js';
+import udfRoutes from './routes/udf.js';
+import { upstoxProvider } from './services/providers/upstox.js';
 
 if (!config.jwt.secret || config.jwt.secret === 'replace_me_with_a_long_random_string') {
   console.warn('\n⚠  JWT_SECRET is missing or still the placeholder. Generate one with:\n' +
@@ -119,6 +122,8 @@ app.use('/api', apiLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/market', marketRoutes);
+app.use('/api/provider', providerRoutes);
+app.use('/udf', udfRoutes); // TradingView UDF datafeed protocol → our backend
 app.use('/api', tradingRoutes); // /api/wallet, /api/trade/*, /api/portfolio
 app.use('/api', contentRoutes); // /api/notes, /api/watchlist, /api/journal
 app.use('/api/learn', learnRoutes);
@@ -163,7 +168,7 @@ wss.on('connection', (sock) => {
   let unsubs = [];
   const subs = { quotes: new Set() };
   const send = (obj) => { if (sock.readyState === 1) { try { sock.send(JSON.stringify(obj)); } catch { /* closed mid-send */ } } };
-  send({ t: 'hello', timeframes: TIMEFRAMES, mode: 'paper-venue' });
+  send({ t: 'hello', timeframes: TIMEFRAMES, mode: 'paper-venue', upstox: upstoxProvider.status() });
 
   sock.on('message', (buf) => {
     let msg;
@@ -184,6 +189,8 @@ wss.on('connection', (sock) => {
     }
   });
 
+  const onStatus = (st) => send({ t: 'status', upstox: st });
+  hub.on('providerStatus', onStatus);
   const onTick = (q) => { if (subs.quotes.has(q.symbol)) send({ t: 'tick', q }); };
   const onCandle = (c) => send({ t: 'candle', c });
   hub.on('tick', onTick);
@@ -193,11 +200,16 @@ wss.on('connection', (sock) => {
     clearInterval(ping);
     hub.off('tick', onTick);
     hub.off('candle', onCandle);
+    hub.off('providerStatus', onStatus);
     unsubs.forEach((u) => { try { u(); } catch { /* noop */ } });
   });
 });
 
 hub.start(1000);
+upstoxProvider.init().then(() => {
+  const st = upstoxProvider.status();
+  console.log(`  ▸ upstox   : ${st.state}${st.reason ? ` (${st.reason})` : ''}`);
+}).catch((e) => console.error('[upstox] init failed:', e.message));
 hub.on('tick', (q) => {
   if (!dbEnabled) return;
   checkPending(q.symbol, q.price).catch((e) => console.error('[pending] check failed:', e.message));

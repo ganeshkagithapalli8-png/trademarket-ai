@@ -22,12 +22,19 @@ router.get('/instruments', optionalAuth, (req, res) => {
   res.json({ instruments: listInstruments(market), count: listInstruments(market).length });
 });
 
-router.get('/quote/:symbol', optionalAuth, (req, res) => {
+router.get('/quote/:symbol', optionalAuth, asyncH(async (req, res) => {
   const inst = getInstrument(req.params.symbol);
   if (!inst) throw notFound(`Unknown instrument "${req.params.symbol}".`);
-  const q = quote(inst.symbol);
-  res.json({ quote: q, disclaimer: 'Simulated or delayed reference price. Not a tradable quote.' });
-});
+  const q = await marketData.getQuoteAsync(inst.symbol);
+  res.json({
+    quote: q,
+    provider: q.provider || 'paper',
+    feed: q.feed,
+    disclaimer: q.provider === 'upstox'
+      ? 'Live quote relayed from Upstox (NSE/BSE). Read-only market data.'
+      : 'Simulated or delayed reference price. Not a tradable quote.',
+  });
+}));
 
 router.get('/candles/:symbol', optionalAuth, (req, res) => {
   const inst = getInstrument(req.params.symbol);
@@ -37,12 +44,16 @@ router.get('/candles/:symbol', optionalAuth, (req, res) => {
   res.json({ symbol: inst.symbol, interval, candles: candles(inst.symbol, interval, limit) });
 });
 
-router.get('/candles-tf/:symbol', (req, res) => {
+router.get('/candles-tf/:symbol', asyncH(async (req, res) => {
   const tf = String(req.query.tf || '5m');
   const limit = Math.max(20, Math.min(Number(req.query.limit) || 240, 500));
-  const candles = marketData.getHistoricalData(req.params.symbol, tf, limit);
-  res.json({ symbol: req.params.symbol, timeframe: tf, candles, feed: marketData.feedInfo(req.params.symbol) });
-});
+  const candles = await marketData.getHistoricalDataAsync(req.params.symbol, tf, limit);
+  res.json({
+    symbol: req.params.symbol, timeframe: tf, candles,
+    feed: marketData.feedInfo(req.params.symbol),
+    provider: candles[candles.length - 1]?.provider || 'paper',
+  });
+}));
 
 router.get('/feed/status', (req, res) => {
   const symbols = String(req.query.symbols || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
