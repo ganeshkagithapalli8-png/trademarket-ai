@@ -50,6 +50,12 @@ export function feedInfo(symbol, q) {
   if (prov === 'upstox') {
     const st = upstoxProvider.status();
     const open = upstoxProvider.marketOpen();
+    // A simulated quote under an upstox-owned symbol means the provider call just
+    // failed (e.g. rate-limited) and we fell back — never dress that up with a
+    // provider label; honesty about the data source outranks the routing state.
+    if (q?.source === 'simulated') {
+      return { source: 'paper', latency: 'paper', label: 'PAPER VENUE · UPSTOX UNAVAILABLE', marketOpen: open, providerState: st.state, degraded: true };
+    }
     if (st.state === 'live') {
       const ws = upstoxProvider.configured && upstoxProvider.streamer;
       return { source: 'upstox', latency: 'live', label: ws ? 'LIVE · UPSTOX WS' : 'LIVE · UPSTOX 1-MIN', marketOpen: true, providerState: 'live' };
@@ -74,7 +80,9 @@ export async function getQuoteAsync(symbol) {
     try {
       const q = await upstoxProvider.getQuote(symbol);
       return { ...q, feed: feedInfo(symbol, q) };
-    } catch { /* fall through to a clearly-labelled REST-less state below */ }
+    } catch (e) {
+      console.warn(`[marketData] upstox quote failed for ${symbol} → labelled paper fallback (${e?.message || e})`);
+    }
   }
   return getQuote(symbol);
 }
