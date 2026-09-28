@@ -76,8 +76,13 @@ async function request(path, { method = 'GET', body, signal, raw = false } = {})
   }
 
   if (res.status === 401 && !path.startsWith('/api/auth/login')) {
-    clearToken();
-    onUnauthorized?.();
+    // Only the session that actually produced this 401 may be cleared. A stale
+    // in-flight response (old token from before a fresh guest/signup adopt, or
+    // another tab's dead session) must never destroy the live session.
+    if (token && token === getToken()) {
+      clearToken();
+      onUnauthorized?.();
+    }
   }
 
   if (raw) return res;
