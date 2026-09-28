@@ -121,6 +121,18 @@ create table if not exists orders (
 );
 create index if not exists orders_user_idx on orders(user_id, created_at desc);
 
+-- Pending-order book (limit orders resting away from the touch, stop orders
+-- waiting for their trigger). Idempotent upgrades for existing databases.
+alter table orders add column if not exists stop_price numeric(18,6);
+alter table orders drop constraint if exists orders_order_type_check;
+alter table orders add constraint orders_order_type_check check (order_type in ('market','limit','stop'));
+alter table orders drop constraint if exists orders_status_check;
+alter table orders add constraint orders_status_check check (status in ('filled','rejected','cancelled','pending'));
+alter table orders drop constraint if exists orders_opened_by_check;
+alter table orders add constraint orders_opened_by_check check (opened_by in ('user','bot','pending'));
+alter table positions drop constraint if exists positions_opened_by_check;
+alter table positions add constraint positions_opened_by_check check (opened_by in ('user','bot','pending'));
+
 create table if not exists positions (
   id            uuid primary key default uuid_generate_v4(),
   user_id       uuid not null references profiles(id) on delete cascade,

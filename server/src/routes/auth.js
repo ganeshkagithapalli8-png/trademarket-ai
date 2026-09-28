@@ -133,8 +133,14 @@ router.post(
       }
       await c.query(
         `insert into watchlist (user_id, symbol, note) values
+           ($1,'RELIANCE','Large-cap bellwether'),
            ($1,'TCS','Watch for IT rotation into results'),
-           ($1,'BTCINR','Live crypto reference pair')
+           ($1,'INFY','IT pair-trade vs TCS'),
+           ($1,'HDFCBANK','Bank NIFTY heavyweight'),
+           ($1,'AAPL','US major (paper venue, USD)'),
+           ($1,'NVDA','US major (paper venue, USD)'),
+           ($1,'BTCINR','Live crypto reference pair'),
+           ($1,'USDINR','FX reference — ECB daily')
          on conflict (user_id, symbol) do nothing`,
         [id]
       );

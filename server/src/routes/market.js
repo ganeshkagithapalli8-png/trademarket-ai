@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { optionalAuth, asyncH, notFound, badRequest, requireAuth, toNumber } from '../middleware.js';
 import { listInstruments, getInstrument, MARKETS } from '../services/instruments.js';
 import { quote, candles, tickers, history, engineInfo } from '../services/marketEngine.js';
+import marketData from '../services/marketData.js';
 import { getNews, newsSources } from '../services/news.js';
 import { liveStatus } from '../services/liveData.js';
 
@@ -34,6 +35,19 @@ router.get('/candles/:symbol', optionalAuth, (req, res) => {
   const interval = ['1m', '5m', '15m', '1h', '1D'].includes(req.query.interval) ? req.query.interval : '15m';
   const limit = Math.min(Math.max(toNumber(req.query.limit, 120), 20), 500);
   res.json({ symbol: inst.symbol, interval, candles: candles(inst.symbol, interval, limit) });
+});
+
+router.get('/candles-tf/:symbol', (req, res) => {
+  const tf = String(req.query.tf || '5m');
+  const limit = Math.max(20, Math.min(Number(req.query.limit) || 240, 500));
+  const candles = marketData.getHistoricalData(req.params.symbol, tf, limit);
+  res.json({ symbol: req.params.symbol, timeframe: tf, candles, feed: marketData.feedInfo(req.params.symbol) });
+});
+
+router.get('/feed/status', (req, res) => {
+  const symbols = String(req.query.symbols || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+  const list = symbols.length ? symbols : INSTRUMENTS.slice(0, 12).map((i) => i.symbol);
+  res.json({ feeds: list.map((s) => ({ symbol: s, ...marketData.feedInfo(s) })) });
 });
 
 router.get('/tickers', optionalAuth, (req, res) => {

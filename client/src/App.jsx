@@ -12,6 +12,7 @@ import AuthPage from './pages/Auth.jsx';
 // Route-level code splitting keeps the first paint fast on mobile networks.
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
 const Markets = lazy(() => import('./pages/Markets.jsx'));
+const Terminal = lazy(() => import('./pages/Terminal.jsx'));
 const TradeView = lazy(() => import('./pages/TradeView.jsx'));
 const Portfolio = lazy(() => import('./pages/Portfolio.jsx'));
 const Wallet = lazy(() => import('./pages/Wallet.jsx'));
@@ -156,6 +157,7 @@ export default function App() {
 
             <Route path="/app" element={<Protected><Dashboard /></Protected>} />
             <Route path="/app/markets" element={<Protected><Markets /></Protected>} />
+            <Route path="/app/terminal" element={<Protected><Terminal /></Protected>} />
             <Route path="/app/trade/:symbol" element={<Protected><TradeView /></Protected>} />
             <Route path="/app/portfolio" element={<Protected><Portfolio /></Protected>} />
             <Route path="/app/wallet" element={<Protected><Wallet /></Protected>} />

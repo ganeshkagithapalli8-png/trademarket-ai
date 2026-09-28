@@ -10,6 +10,7 @@ import { SimBanner } from './SimBanner.jsx';
 const NAV = [
   { to: '/app', label: 'Dashboard', icon: 'home', end: true },
   { to: '/app/markets', label: 'Markets', icon: 'chart' },
+  { to: '/app/terminal', label: 'Terminal', icon: 'target' },
   { to: '/app/portfolio', label: 'Portfolio', icon: 'layers' },
   { to: '/app/learn', label: 'Learn', icon: 'book' },
   { to: '/app/bot', label: 'Bot Lab', icon: 'bot' },

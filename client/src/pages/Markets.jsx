@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useLiveQuotes } from '../lib/marketSocket.js';
 import { Link } from 'react-router-dom';
 import { Card, Badge, Icon, Input, Tabs, Skeleton, EmptyState, usePoll, Alert, SectionTitle, Flash } from '../components/ui.jsx';
 import { Sparkline } from '../components/Chart.jsx';
@@ -24,19 +25,25 @@ export default function Markets() {
   const { data: access } = usePoll(() => Profile.marketAccess(), 120000, []);
 
   const rows = ticks?.tickers || [];
+  const wsSymbols = useMemo(() => rows.map((r) => r.symbol), [rows]);
+  const { quotes: live, status: wsStatus } = useLiveQuotes(wsSymbols);
+  const rowsLive = useMemo(
+    () => rows.map((r) => (live[r.symbol] ? { ...r, price: live[r.symbol].price, change: live[r.symbol].change, changePct: live[r.symbol].changePct, feed: live[r.symbol].feed } : r)),
+    [rows, live]
+  );
   const sectors = useMemo(() => ['all', ...new Set(rows.map((r) => r.sector))], [rows]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    return rows.filter((r) => {
+    return rowsLive.filter((r) => {
       if (sector !== 'all' && r.sector !== sector) return false;
       if (!term) return true;
       return r.symbol.toLowerCase().includes(term) || r.name.toLowerCase().includes(term) || (r.sector || '').toLowerCase().includes(term);
     });
-  }, [rows, q, sector]);
+  }, [rowsLive, q, sector]);
 
-  const gainers = [...rows].sort((a, b) => b.changePct - a.changePct).slice(0, 3);
-  const losers = [...rows].sort((a, b) => a.changePct - b.changePct).slice(0, 3);
+  const gainers = [...rowsLive].sort((a, b) => b.changePct - a.changePct).slice(0, 3);
+  const losers = [...rowsLive].sort((a, b) => a.changePct - b.changePct).slice(0, 3);
   const accessFor = (m) => access?.access?.find((a) => a.id === m);
 
   const lockedNotice = tab !== 'all' ? accessFor(tab) : null;
@@ -50,6 +57,10 @@ export default function Markets() {
             Real live board on top; simulated paper prices below for risk-free fills.
           </p>
         </div>
+        <span data-testid="markets-stream"
+          className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-bold ${wsStatus === 'live' ? 'border-emerald-200 bg-emerald-50 text-emerald-600' : wsStatus === 'closed' ? 'border-slate-200 bg-slate-50 text-slate-400' : 'border-amber-200 bg-amber-50 text-amber-600'}`}>
+          {wsStatus === 'live' ? '● LIVE STREAM' : wsStatus === 'closed' ? 'STREAM OFFLINE' : 'RECONNECTING…'}
+        </span>
         <button onClick={refresh} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12.5px] font-semibold text-slate-600 transition hover:bg-slate-50 active:scale-95">
           <Icon name="refresh" className="h-3.5 w-3.5" /> Refresh
         </button>

@@ -145,6 +145,9 @@ export const Market = {
   news: (market = 'all', refresh = false) =>
     api.get(`/api/market/news?market=${market}${refresh ? '&refresh=1' : ''}`),
   liveStatus: () => api.get('/api/market/live-status'),
+  candlesTf: (symbol, tf = '5m', limit = 240) =>
+    api.get(`/api/market/candles-tf/${encodeURIComponent(symbol)}?tf=${tf}&limit=${limit}`),
+  feedStatus: (symbols) => api.get(`/api/market/feed/status?symbols=${encodeURIComponent((symbols || []).join(','))}`),
 };
 
 export const Wallet = {
@@ -157,6 +160,7 @@ export const Wallet = {
 
 export const Trade = {
   order: (b) => api.post('/api/trade/order', b),
+  cancelOrder: (id) => api.del(`/api/trade/order/${id}`),
   close: (id, reason = 'manual') => api.post(`/api/trade/close/${id}`, { reason }),
   positions: (status = 'open') => api.get(`/api/trade/positions?status=${status}`),
   orders: () => api.get('/api/trade/orders'),

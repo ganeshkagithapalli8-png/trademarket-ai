@@ -7,6 +7,10 @@ import { config } from './config.js';
 import { errorHandler, notFoundHandler, apiLimiter } from './middleware.js';
 import { dbEnabled, adminPool } from './db/index.js';
 import { startLiveData } from './services/liveData.js';
+import { hub, TIMEFRAMES } from './services/marketData.js';
+import { checkPending } from './services/pendingOrders.js';
+import { admin } from './db/index.js';
+import { WebSocketServer } from 'ws';
 import { runAllBots } from './services/botRunner.js';
 
 import authRoutes from './routes/auth.js';
@@ -150,6 +154,65 @@ const server = app.listen(config.port, '0.0.0.0', () => {
 
   if (dbEnabled) startLoops();
 });
+
+// ── market WebSocket: streaming quotes + live candles (spec §1/§3/§10) ──────
+// One tick hub feeds every socket; candles aggregate server-side per
+// timeframe and roll over without the client ever refetching history.
+const wss = new WebSocketServer({ server, path: '/ws/market' });
+wss.on('connection', (sock) => {
+  let unsubs = [];
+  const subs = { quotes: new Set() };
+  const send = (obj) => { if (sock.readyState === 1) { try { sock.send(JSON.stringify(obj)); } catch { /* closed mid-send */ } } };
+  send({ t: 'hello', timeframes: TIMEFRAMES, mode: 'paper-venue' });
+
+  sock.on('message', (buf) => {
+    let msg;
+    try { msg = JSON.parse(String(buf)); } catch { return; }
+    if (msg.op === 'sub') {
+      unsubs.forEach((u) => { try { u(); } catch { /* noop */ } });
+      unsubs = [];
+      const symbols = Array.isArray(msg.symbols) ? msg.symbols.filter((s) => typeof s === 'string').slice(0, 60) : [];
+      subs.quotes = new Set(symbols);
+      if (symbols.length) unsubs.push(hub.subscribeQuotes(symbols));
+      for (const pair of Array.isArray(msg.candles) ? msg.candles.slice(0, 12) : []) {
+        const [s, tf] = Array.isArray(pair) ? pair : [];
+        if (typeof s === 'string' && TIMEFRAMES.includes(tf)) {
+          subs.quotes.add(s);
+          unsubs.push(hub.subscribeCandles(s, tf));
+        }
+      }
+    }
+  });
+
+  const onTick = (q) => { if (subs.quotes.has(q.symbol)) send({ t: 'tick', q }); };
+  const onCandle = (c) => send({ t: 'candle', c });
+  hub.on('tick', onTick);
+  hub.on('candle', onCandle);
+  const ping = setInterval(() => { try { sock.ping(); } catch { /* noop */ } }, 25_000);
+  sock.on('close', () => {
+    clearInterval(ping);
+    hub.off('tick', onTick);
+    hub.off('candle', onCandle);
+    unsubs.forEach((u) => { try { u(); } catch { /* noop */ } });
+  });
+});
+
+hub.start(1000);
+hub.on('tick', (q) => {
+  if (!dbEnabled) return;
+  checkPending(q.symbol, q.price).catch((e) => console.error('[pending] check failed:', e.message));
+});
+if (dbEnabled) {
+  // Keep symbols with resting orders on the tick stream so they can fill.
+  const watcher = setInterval(async () => {
+    try {
+      const { rows } = await admin((c) => c.query(`select distinct symbol from orders where status='pending'`));
+      for (const r of rows) hub.quotes.add(r.symbol);
+    } catch (e) { console.error('[pending] watcher failed:', e.message); }
+  }, 5_000);
+  watcher.unref?.();
+}
+console.log('  ▸ ws       : /ws/market (streaming quotes + candles)');
 
 // ── graceful shutdown ───────────────────────────────────────────────────────
 

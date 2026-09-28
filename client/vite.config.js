@@ -21,6 +21,12 @@ export default defineConfig({
         target: process.env.VITE_PROXY_TARGET || 'http://localhost:5000',
         changeOrigin: true,
       },
+      // Market WebSocket (streaming quotes + live candles) upgrade proxying.
+      '/ws': {
+        target: 'ws://localhost:5000',
+        ws: true,
+        changeOrigin: true,
+      },
     },
   },
   preview: {
@@ -39,6 +45,12 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: process.env.VITE_PROXY_TARGET || 'http://localhost:5000',
+        changeOrigin: true,
+      },
+      // Market WebSocket (streaming quotes + live candles) upgrade proxying.
+      '/ws': {
+        target: 'ws://localhost:5000',
+        ws: true,
         changeOrigin: true,
       },
     },

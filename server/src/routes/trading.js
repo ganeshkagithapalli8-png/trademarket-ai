@@ -17,6 +17,7 @@ import {
 } from '../middleware.js';
 import { getInstrument, MARKETS } from '../services/instruments.js';
 import { quote } from '../services/marketEngine.js';
+import { invalidatePending } from '../services/pendingOrders.js';
 import { MARKET_GATES } from '../services/roadmap.js';
 import { pnlOf } from '../services/bot.js';
 
@@ -159,26 +160,44 @@ router.post('/trade/order', tradeLimiter, asyncH(async (req, res) => {
   const q = quote(inst.symbol);
   if (!q) throw badRequest('No price available for that instrument.');
 
-  // Adverse slippage: you never get the mid in a real market.
-  const slip = q.price * (SLIPPAGE_BPS / 10_000);
-  const fillPrice = side === 'buy' ? q.price + slip : q.price - slip;
-
-  const orderType = req.body.orderType === 'limit' ? 'limit' : 'market';
+  const orderType = req.body.orderType === 'limit' ? 'limit' : req.body.orderType === 'stop' ? 'stop' : 'market';
   const limitPrice = orderType === 'limit' ? toNumber(req.body.limitPrice) : null;
-  if (orderType === 'limit') {
-    if (!Number.isFinite(limitPrice) || limitPrice <= 0) throw badRequest('A limit order needs a valid limit price.');
-    const marketable = side === 'buy' ? limitPrice >= q.price : limitPrice <= q.price;
+  const stopPrice = orderType === 'stop' ? toNumber(req.body.stopPrice ?? req.body.limitPrice) : null;
+  if (orderType === 'limit' && (!Number.isFinite(limitPrice) || limitPrice <= 0)) throw badRequest('A limit order needs a valid limit price.');
+  if (orderType === 'stop' && (!Number.isFinite(stopPrice) || stopPrice <= 0)) throw badRequest('A stop order needs a valid trigger price.');
+
+  // Resting orders: a limit away from the touch, or a stop waiting for its
+  // trigger, rests as 'pending' and fills from the tick stream when crossed.
+  const touch = orderType === 'limit' ? limitPrice : orderType === 'stop' ? stopPrice : null;
+  if (touch != null) {
+    const marketable = orderType === 'limit'
+      ? (side === 'buy' ? limitPrice >= q.price : limitPrice <= q.price)
+      : (side === 'buy' ? stopPrice <= q.price : stopPrice >= q.price);
     if (!marketable) {
-      await withUser(req.userId, (c) =>
+      const sl = req.body.stopLoss != null ? toNumber(req.body.stopLoss) : null;
+      const tg = req.body.target != null ? toNumber(req.body.target) : null;
+      const { rows } = await withUser(req.userId, (c) =>
         c.query(
-          `insert into orders (user_id, symbol, market, side, qty, order_type, limit_price, status, reason)
-           values ($1,$2,$3,$4,$5,'limit',$6,'rejected',$7)`,
-          [req.userId, inst.symbol, inst.market, side, qty, limitPrice, 'Limit not marketable at the current simulated price.']
+          `insert into orders (user_id, symbol, market, side, qty, order_type, limit_price, stop_price, stop_loss, target, status, opened_by)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending','user') returning *`,
+          [req.userId, inst.symbol, inst.market, side, qty, orderType, limitPrice, stopPrice, sl, tg]
         )
       );
-      throw badRequest(`Limit of ₹${limitPrice} would not fill at the current simulated price of ₹${q.price.toFixed(2)}.`);
+      invalidatePending();
+      return res.status(202).json({
+        pending: true,
+        order: rows[0],
+        simulated: true,
+        notice: `Resting ${orderType} order. It fills from the paper tick stream when the price crosses ${touch}.`,
+      });
     }
   }
+
+  // Adverse slippage: you never get the mid in a real market. A marketable
+  // limit/stop fills at its trigger price, not at the touch.
+  const base = orderType === 'market' ? q.price : touch;
+  const slip = base * (SLIPPAGE_BPS / 10_000);
+  const fillPrice = side === 'buy' ? base + slip : base - slip;
 
   const posSide = side === 'buy' ? 'long' : 'short';
   const stopLoss = req.body.stopLoss != null ? toNumber(req.body.stopLoss) : null;
@@ -236,6 +255,19 @@ router.post('/trade/order', tradeLimiter, asyncH(async (req, res) => {
     simulated: true,
     notice: 'Paper fill against simulated liquidity. No real order was sent anywhere.',
   });
+}));
+
+router.delete('/trade/order/:id', tradeLimiter, asyncH(async (req, res) => {
+  const { rows } = await withUser(req.userId, (c) =>
+    c.query(
+      `update orders set status='cancelled', reason='Cancelled by user.'
+       where id=$1 and user_id=$2 and status='pending' returning *`,
+      [req.params.id, req.userId]
+    )
+  );
+  if (!rows.length) throw notFound('No pending order with that id (only pending orders can be cancelled).');
+  invalidatePending();
+  res.json({ cancelled: rows[0], simulated: true });
 }));
 
 router.post('/trade/close/:id', tradeLimiter, asyncH(async (req, res) => {

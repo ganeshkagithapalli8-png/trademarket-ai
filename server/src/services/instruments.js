@@ -60,6 +60,12 @@ export const MARKETS = {
  */
 export const INSTRUMENTS = [
   // ── Indian equities ─────────────────────────────────────────────
+  // US majors on the paper venue (USD). Charts/search also resolve their real
+  // exchange symbols (NASDAQ:*) through the TradingView widgets.
+  { symbol: 'AAPL', name: 'Apple Inc.', market: 'stocks', sector: 'US', currency: 'USD', base: 232, vol: 0.22, drift: 0.09, lot: 1, seed: 1101 },
+  { symbol: 'TSLA', name: 'Tesla Inc.', market: 'stocks', sector: 'US', currency: 'USD', base: 262, vol: 0.45, drift: 0.12, lot: 1, seed: 1102 },
+  { symbol: 'NVDA', name: 'NVIDIA Corp.', market: 'stocks', sector: 'US', currency: 'USD', base: 172, vol: 0.38, drift: 0.15, lot: 1, seed: 1103 },
+  { symbol: 'MSFT', name: 'Microsoft Corp.', market: 'stocks', sector: 'US', currency: 'USD', base: 468, vol: 0.20, drift: 0.10, lot: 1, seed: 1104 },
   { symbol: 'RELIANCE', name: 'Reliance Industries', market: 'stocks', sector: 'Energy', base: 2915, vol: 0.24, drift: 0.08, lot: 1, seed: 1001 },
   { symbol: 'TCS', name: 'Tata Consultancy Services', market: 'stocks', sector: 'IT', base: 4120, vol: 0.21, drift: 0.07, lot: 1, seed: 1002 },
   { symbol: 'HDFCBANK', name: 'HDFC Bank', market: 'stocks', sector: 'Banking', base: 1685, vol: 0.20, drift: 0.09, lot: 1, seed: 1003 },
