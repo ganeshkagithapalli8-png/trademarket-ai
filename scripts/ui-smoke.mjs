@@ -31,7 +31,9 @@ const ok = (name, cond, extra = '') => {
 const section = (t) => console.log(`\n\x1b[1m${t}\x1b[0m`);
 
 // Noise we do not care about: dev-server HMR chatter, third-party favicon, etc.
-const BENIGN = /favicon|Download the React DevTools|WebSocket|HMR|vite|net::ERR_ABORTED|404 \(Not Found\).*favicon/i;
+// Third-party embed teardown noise: TradingView's loader complains when the user
+// navigates away mid-load (its iframe detaches). CDN message, not an app error.
+const BENIGN = /favicon|Download the React DevTools|WebSocket|HMR|vite|net::ERR_ABORTED|404 \(Not Found\).*favicon|Cannot listen to the event from the provided iframe/i;
 
 const stamp = Date.now();
 const USER = {
@@ -503,6 +505,8 @@ section('K · Interactivity: one-click demo, live ticks, hover crosshair, countd
   const svg = await d.$('[data-testid="candle-chart"]');
   ok('chart present for hover test', Boolean(svg));
   const before = await d.$$eval('svg line[stroke-dasharray="3 3"]', (e) => e.length).catch(() => 0);
+  await svg.scrollIntoViewIfNeeded(); // real-market card above can push it below the fold
+  await d.waitForTimeout(300);
   const box = await svg.boundingBox();
   await d.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.5);
   await d.waitForTimeout(500);

@@ -73,9 +73,44 @@ async function refreshKite() {
   lastRun.kite = { at: new Date().toISOString(), symbols: Object.keys(data).length };
 }
 
+/**
+ * ECB daily reference rates (Frankfurter, no key). Crossed into INR so the
+ * forex tab shows real-world levels instead of pure simulation. Daily, not
+ * tick-by-tick — labelled as such wherever it is displayed.
+ */
+const FX_FROM_USD = {
+  USDINR: (r) => r.INR,
+  EURINR: (r) => r.INR / r.EUR,
+  GBPINR: (r) => r.INR / r.GBP,
+  JPYINR: (r) => r.INR / r.JPY,
+  EURUSD: (r) => 1 / r.EUR,
+};
+
+async function refreshForex() {
+  if (!config.market.liveForex) return;
+  const res = await fetch('https://api.frankfurter.app/latest?base=USD&symbols=INR,EUR,GBP,JPY', {
+    headers: { Accept: 'application/json', 'User-Agent': 'TradeMarketAI/1.0 (educational simulator)' },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) throw new Error(`Frankfurter HTTP ${res.status}`);
+  const j = await res.json();
+  const r = j?.rates || {};
+  if (typeof r.INR !== 'number') throw new Error('Frankfurter: no INR rate in response');
+  let n = 0;
+  for (const [sym, fn] of Object.entries(FX_FROM_USD)) {
+    const price = fn(r);
+    if (Number.isFinite(price) && price > 0) {
+      overlay.set(sym, { price, at: Date.now(), source: 'ecb', asOf: j.date || null });
+      n++;
+    }
+  }
+  lastRun.forex = { at: new Date().toISOString(), pairs: n, rateDate: j.date || null };
+}
+
 export async function refreshLiveOnce() {
   const errors = [];
   await refreshCrypto().catch((e) => errors.push(`crypto: ${e.message}`));
+  await refreshForex().catch((e) => errors.push(`forex: ${e.message}`));
   await refreshKite().catch((e) => errors.push(`kite: ${e.message}`));
 
   // Drop anything stale so the simulator falls back cleanly.
@@ -95,7 +130,11 @@ export function startLiveData(intervalMs = 60_000) {
 }
 
 export const liveStatus = () => ({
-  enabled: { crypto: config.market.liveCrypto, kite: Boolean(config.market.kiteApiKey && config.market.kiteAccessToken) },
+  enabled: {
+    crypto: config.market.liveCrypto,
+    forex: config.market.liveForex,
+    kite: Boolean(config.market.kiteApiKey && config.market.kiteAccessToken),
+  },
   pairs: overlay.size,
   lastRun,
   note: 'Quote adapters are read-only. No broker order-routing exists in this application.',

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, Badge, Icon, Input, Tabs, Skeleton, EmptyState, usePoll, Alert, SectionTitle, Flash } from '../components/ui.jsx';
 import { Sparkline } from '../components/Chart.jsx';
+import { TickerTape } from '../components/TradingView.jsx';
 import { Market, Profile } from '../lib/api.js';
 import { money, pct, compact, n } from '../lib/format.js';
 
@@ -46,13 +47,31 @@ export default function Markets() {
         <div>
           <h1 className="text-[24px] font-extrabold tracking-tight text-slate-900 sm:text-[27px]">Markets</h1>
           <p className="mt-1 text-[13px] text-slate-500">
-            Simulated prices with realistic volatility. Optional live crypto reference from CoinGecko.
+            Real live board on top; simulated paper prices below for risk-free fills.
           </p>
         </div>
         <button onClick={refresh} className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12.5px] font-semibold text-slate-600 transition hover:bg-slate-50 active:scale-95">
           <Icon name="refresh" className="h-3.5 w-3.5" /> Refresh
         </button>
       </div>
+
+      <Card pad={false} className="overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3.5 sm:px-5">
+          <div>
+            <p className="flex items-center gap-2 text-[13.5px] font-bold text-slate-900">
+              <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-emerald-500" /> Live board — real prices
+            </p>
+            <p className="mt-0.5 text-[11px] text-slate-400">
+              Real FX, crypto, gold and Indian ADR / India-50 proxies, read-only. Crypto & FX also price the server
+              side (CoinGecko / ECB). Direct NSE ticks need your own broker key; paper fills below stay simulated.
+            </p>
+          </div>
+          <Badge tone="up" icon="zap">REAL</Badge>
+        </div>
+        <div className="mt-2">
+          <TickerTape />
+        </div>
+      </Card>
 
       <Tabs tabs={TABS} value={tab} onChange={setTab} />
 
@@ -180,8 +199,9 @@ export default function Markets() {
       )}
 
       <p className="px-1 text-center text-[11px] leading-relaxed text-slate-400">
-        Prices are synthetic simulator output (crypto may use a delayed public reference). Nothing here is a tradable
-        quote and nothing here is investment advice.
+        Live board: TradingView public widget in your browser, plus CoinGecko (crypto) and ECB/Frankfurter (FX)
+        read-only server references — all delayed or exchange-subject, none tradable. Paper candles and fills below
+        are synthetic simulator output. Nothing here is investment advice.
       </p>
     </div>
   );

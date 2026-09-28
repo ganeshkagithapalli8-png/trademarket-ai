@@ -6,6 +6,7 @@ import {
   SectionTitle, Skeleton, Confirm, usePoll, Flash,
 } from '../components/ui.jsx';
 import { CandleChart } from '../components/Chart.jsx';
+import { TVChart, tvSymbol, tvNote } from '../components/TradingView.jsx';
 import { Market, Trade, Bot, Content, AI, Wallet } from '../lib/api.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -34,6 +35,7 @@ export default function TradeView() {
   const [placing, setPlacing] = useState(false);
   const [closing, setClosing] = useState(null);
   const { openAddFunds } = useFunds();
+  const [showReal, setShowReal] = useState(true);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiText, setAiText] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
@@ -287,8 +289,28 @@ export default function TradeView() {
         <div className="space-y-5">
           <Card>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="flex items-center gap-2 text-[13.5px] font-bold text-slate-900">
+                  <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-emerald-500" /> Real market chart
+                </p>
+                <p className="mt-0.5 text-[11px] text-slate-400">
+                  TradingView · {tvSymbol(q)} · 15m · read-only. {tvNote(q)}
+                </p>
+              </div>
+              <Button size="xs" variant="ghost" icon={showReal ? 'x' : 'zap'} onClick={() => setShowReal((v) => !v)}>
+                {showReal ? 'Hide' : 'Show'}
+              </Button>
+            </div>
+            {showReal ? <TVChart inst={q} /> : null}
+          </Card>
+
+          <Card>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <Tabs tabs={INTERVALS} value={interval} onChange={setInterval} scrollable={false} className="w-auto" />
-              <Button size="xs" variant="soft" icon="spark" onClick={askAI}>Explain this chart</Button>
+              <span className="flex items-center gap-2">
+                <Badge tone="neutral">Paper candles</Badge>
+                <Button size="xs" variant="soft" icon="spark" onClick={askAI}>Explain this chart</Button>
+              </span>
             </div>
             {cLoading && !candles.length ? (
               <div className="grid h-[300px] place-items-center"><Spinner className="h-6 w-6 text-brand-500" /></div>

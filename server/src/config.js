@@ -44,6 +44,7 @@ export const config = {
 
   market: {
     liveCrypto: bool(process.env.LIVE_CRYPTO, true),
+    liveForex: bool(process.env.LIVE_FOREX, true),
     kiteApiKey: process.env.KITE_API_KEY || '',
     kiteApiSecret: process.env.KITE_API_SECRET || '',
     kiteAccessToken: process.env.KITE_ACCESS_TOKEN || '',

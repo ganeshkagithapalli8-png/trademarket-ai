@@ -99,11 +99,11 @@ export const INSTRUMENTS = [
   { symbol: 'XRPINR', name: 'XRP / INR', market: 'crypto', sector: 'Crypto', base: 61.4, vol: 0.80, drift: 0.08, lot: 1, seed: 4005, coin: 'ripple', live: true, decimals: 4 },
 
   // ── Forex (INR pairs, simulated) ────────────────────────────────
-  { symbol: 'USDINR', name: 'US Dollar / Indian Rupee', market: 'forex', sector: 'FX', base: 83.42, vol: 0.045, drift: 0.015, lot: 1000, seed: 5001, decimals: 4 },
-  { symbol: 'EURINR', name: 'Euro / Indian Rupee', market: 'forex', sector: 'FX', base: 91.18, vol: 0.055, drift: 0.010, lot: 1000, seed: 5002, decimals: 4 },
-  { symbol: 'GBPINR', name: 'Pound Sterling / Indian Rupee', market: 'forex', sector: 'FX', base: 107.62, vol: 0.060, drift: 0.008, lot: 1000, seed: 5003, decimals: 4 },
-  { symbol: 'JPYINR', name: 'Japanese Yen / Indian Rupee', market: 'forex', sector: 'FX', base: 0.5642, vol: 0.070, drift: -0.005, lot: 10000, seed: 5004, decimals: 4 },
-  { symbol: 'EURUSD', name: 'Euro / US Dollar', market: 'forex', sector: 'FX', base: 1.0930, vol: 0.058, drift: 0.000, lot: 1000, seed: 5005, decimals: 5 },
+  { symbol: 'USDINR', name: 'US Dollar / Indian Rupee', market: 'forex', sector: 'FX', base: 83.42, vol: 0.045, drift: 0.015, lot: 1000, seed: 5001, decimals: 4, live: true },
+  { symbol: 'EURINR', name: 'Euro / Indian Rupee', market: 'forex', sector: 'FX', base: 91.18, vol: 0.055, drift: 0.010, lot: 1000, seed: 5002, decimals: 4, live: true },
+  { symbol: 'GBPINR', name: 'Pound Sterling / Indian Rupee', market: 'forex', sector: 'FX', base: 107.62, vol: 0.060, drift: 0.008, lot: 1000, seed: 5003, decimals: 4, live: true },
+  { symbol: 'JPYINR', name: 'Japanese Yen / Indian Rupee', market: 'forex', sector: 'FX', base: 0.5642, vol: 0.070, drift: -0.005, lot: 10000, seed: 5004, decimals: 4, live: true },
+  { symbol: 'EURUSD', name: 'Euro / US Dollar', market: 'forex', sector: 'FX', base: 1.0930, vol: 0.058, drift: 0.000, lot: 1000, seed: 5005, decimals: 5, live: true },
   { symbol: 'XAUUSD', name: 'Gold Spot / USD (SIM)', market: 'forex', sector: 'Commodity', base: 2648.5, vol: 0.14, drift: 0.09, lot: 10, seed: 5006, decimals: 2 },
 ];
 

@@ -122,22 +122,30 @@ if (existing.status === 200) {
 } else warn(`service lookup ${existing.status}: ${JSON.stringify(existing.body).slice(0, 160)}`);
 
 if (!svcId) {
+  // Render's v1 schema: type is `web_service`, and runtime config lives under
+  // serviceDetails (runtime is mandatory). ownerID comes from /v1/owners.
+  const owners = await j('https://api.render.com/v1/owners', { headers: rh });
+  const ownerID = owners.body?.[0]?.owner?.id;
+  if (!ownerID) warn('could not resolve a Render ownerID from /v1/owners');
   const created = await j('https://api.render.com/v1/services', {
     method: 'POST',
     headers: rh,
     body: JSON.stringify({
-      type: 'web',
+      type: 'web_service',
       name: API_NAME,
+      ownerID,
       repo: `https://github.com/${owner}/${REPO}`,
       branch: 'main',
-      rootDir: 'server',
-      buildCommand: 'npm install --omit=dev',
-      startCommand: 'npm start',
       plan: 'free',
       region: REGION,
-      autoDeploy: true,
-      healthCheckPath: '/api/health',
-      envVars: renderEnv,
+      serviceDetails: {
+        runtime: 'node',
+        rootDir: 'server',
+        buildCommand: 'npm install --omit=dev',
+        startCommand: 'npm start',
+        healthCheckPath: '/api/health',
+        envVars: renderEnv,
+      },
     }),
   });
   if (created.status >= 200 && created.status < 300) {
