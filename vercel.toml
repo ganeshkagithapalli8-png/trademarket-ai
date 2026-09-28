@@ -1,0 +1,23 @@
+# ── Vercel: client/ only ────────────────────────────────────────────────────
+# The Express API is NOT deployed here. Vercel serves the built SPA from
+# client/dist; the API lives on Render and is reached via VITE_API_BASE_URL.
+
+[build]
+  base    = "client"
+  command = "npm run build"
+  output  = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Single-page app: every non-asset path resolves to index.html so React Router
+# owns the routing.
+[[redirects]]
+  from = "/*"
+  to   = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

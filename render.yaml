@@ -1,0 +1,33 @@
+services:
+  # ── Backend: Express API ────────────────────────────────────────────────
+  # Deployed to Render. Docker is not used; Render runs the Node build/start
+  # commands directly against server/package.json.
+  - type: web
+    name: trademarket-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm ci --omit=dev || npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # Set these in the Render dashboard or via the Render API:
+      #   CLIENT_URL          = your Vercel URL (comma-separate several)
+      #   JWT_SECRET          = long random string
+      #   SUPABASE_DB_URL     = Postgres connection string (URI)
+      #   SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY
+      #   GEMINI_API_KEY
+      #   APP_DB_ROLE_PASSWORD= password of the tm_app RLS role
+      - key: PAPER_TRADING_ONLY
+        value: 'true'
+      - key: MIN_USER_AGE
+        value: '18'
+      - key: MIN_SIM_DEPOSIT_INR
+        value: '50'
+      - key: LIVE_CRYPTO
+        value: 'true'

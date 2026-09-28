@@ -1,0 +1,21 @@
+{
+  "name": "trademarket-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TradeMarket AI — full-stack paper-trading education platform. React + Tailwind + Express + Supabase (Postgres) + Gemini.",
+  "type": "module",
+  "scripts": {
+    "setup": "npm --prefix server install && npm --prefix client install",
+    "migrate": "npm --prefix server run migrate",
+    "dev:api": "npm --prefix server run dev",
+    "dev:web": "npm --prefix client run dev",
+    "build": "npm --prefix client run build",
+    "start": "npm --prefix server start",
+    "test": "node scripts/e2e-test.mjs",
+    "test:remote": "node scripts/e2e-test.mjs"
+  },
+  "devDependencies": {
+    "pg": "^8.12.0",
+    "playwright": "^1.63.0"
+  }
+}

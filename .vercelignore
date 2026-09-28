@@ -1,0 +1,15 @@
+node_modules
+.git
+.gitignore
+*.md
+scripts
+.env
+.env.*
+server/data
+client/node_modules
+server/node_modules
+client/dist
+client/.vercel
+.vercel
+playwright-report
+test-results

@@ -1,0 +1,37 @@
+# ── secrets ────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── dependencies ───────────────────────────────────────────
+node_modules/
+
+# ── build output ───────────────────────────────────────────
+dist/
+build/
+.vercel/
+
+# ── local data / logs ──────────────────────────────────────
+server/data/
+*.log
+npm-debug.log*
+logs/
+
+# ── editors / os ───────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# ── caches ─────────────────────────────────────────────────
+.cache/
+.turbo/
+coverage/
+
+# test artifacts
+scripts/shots/
+playwright-report/
+test-results/
