@@ -55,6 +55,9 @@ export { COOKIE_NAME };
 function extractToken(req) {
   const h = req.headers.authorization;
   if (h && /^Bearer\s+/i.test(h)) return h.replace(/^Bearer\s+/i, '').trim();
+  // Redundant carrier for previews behind proxies that strip Authorization.
+  const x = req.headers['x-tm-token'];
+  if (x && typeof x === 'string') return x.trim();
   if (req.cookies?.[COOKIE_NAME]) return req.cookies[COOKIE_NAME];
   return null;
 }

@@ -54,7 +54,12 @@ async function request(path, { method = 'GET', body, signal, raw = false } = {})
   const token = getToken();
   const headers = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+    // Some preview proxies strip the Authorization header; the custom header is
+    // a redundant carrier so a stripped request still authenticates.
+    headers['X-TM-Token'] = token;
+  }
 
   let res;
   try {

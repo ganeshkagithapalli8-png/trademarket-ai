@@ -30,6 +30,12 @@ export default defineConfig({
     // Production preview must behave exactly like dev for the embedded viewer:
     // same /api proxy and same permissive CORS (sandboxed frames are origin null).
     cors: { origin: true, credentials: true },
+    // Proxies and browsers must never cache the shell: a stale index.html
+    // pins users to old bundles (seen in the wild through the preview proxy).
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      Pragma: 'no-cache',
+    },
     proxy: {
       '/api': {
         target: process.env.VITE_PROXY_TARGET || 'http://localhost:5000',
