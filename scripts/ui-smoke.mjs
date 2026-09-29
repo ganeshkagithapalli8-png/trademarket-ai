@@ -285,9 +285,10 @@ section('F · Real interactions: place a paper order and close it');
   const defaultQty = Number((buyLabel.match(/Buy ([\d,.]+)/) || [])[1]?.replace(/,/g, ''));
   ok('ticket defaults to a risk-based quantity (> 1 share)', defaultQty > 1, `qty=${defaultQty}`);
 
-  // Chart must have drawn candle bodies.
-  const rects = await page.$$eval('svg rect', (els) => els.length);
-  ok('candlestick chart rendered SVG elements', rects > 50, `rects=${rects}`);
+  // Chart must have drawn candles (TradingView Lightweight Charts canvas engine).
+  const bars = Number(await page.$eval('[data-testid="chartpro"]', (el) => el.getAttribute('data-bars')) || 0);
+  const canvases = (await page.$$('[data-testid="chartpro"] canvas')).length;
+  ok('candlestick chart rendered on the TV Lightweight Charts engine', bars > 20 && canvases >= 1, `bars=${bars} canvases=${canvases}`);
 
   const before = await api('/api/portfolio', { token });
   const cashBefore = before.body?.cash ?? 0;

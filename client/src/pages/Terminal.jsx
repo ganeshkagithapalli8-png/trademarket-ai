@@ -166,7 +166,7 @@ export default function Terminal() {
         </div>
         <div className="min-w-0">
           <div ref={tvHostRef} data-testid="tv-chart-host" className={tvMounted ? 'rounded-2xl overflow-hidden border border-slate-200' : 'hidden'} style={tvMounted ? { height: 420 } : undefined} />
-          {!tvMounted ? <ChartPro symbol={symbol} name={current?.name} feed={q?.feed} height={420} /> : null}
+          {!tvMounted ? <ChartPro symbol={symbol} name={current?.name} feed={q?.feed} inst={current} height={420} /> : null}
           <p className="mt-1.5 text-[10.5px] text-slate-400">
             Prices and candles stream from the same provider facade.{' '}
             {q?.feed?.latency === 'live' ? 'Live provider feed.' : q?.feed?.latency === 'delayed' ? 'Delayed provider reference.' : 'Simulated paper-venue prices — not real quotes.'}{' '}

@@ -84,30 +84,42 @@ else ok(feedLabel === 'PAPER VENUE', `public feed unreachable/rate-limited — h
 const banner = (await frame.locator('[data-testid="paper-banner"]').textContent()).trim();
 ok(banner === 'PAPER TRADING — NO REAL MONEY', `banner: "${banner}"`);
 
-// chart: candles drawn
-await frame.locator('[data-testid="chartpro"] svg').first().waitFor({ timeout: 15000 });
-const rects0 = await frame.locator('[data-testid="chartpro"] svg rect').count();
-ok(rects0 >= 20, `chart drew ${rects0} candle/body rects`);
+// chart: TradingView Lightweight Charts™ engine renders bars on canvas
+await frame.locator('[data-testid="chartpro"] canvas').first().waitFor({ timeout: 15000 });
+const bars0 = Number(await frame.locator('[data-testid="chartpro"]').getAttribute('data-bars'));
+ok(bars0 >= 20 && (await frame.locator('[data-testid="chartpro"] canvas').count()) >= 1, `TV Lightweight Charts engine holds ${bars0} bars on canvas`);
 
 // timeframe switch to 1D
 await frame.locator('[data-testid="chart-tf-1D"]').click();
 await page.waitForTimeout(1800);
-const rects1D = await frame.locator('[data-testid="chartpro"] svg rect').count();
-ok(rects1D >= 10, `1D timeframe drew ${rects1D} rects`);
+const bars1D = Number(await frame.locator('[data-testid="chartpro"]').getAttribute('data-bars'));
+ok(bars1D >= 10, `1D timeframe holds ${bars1D} bars`);
 await frame.locator('[data-testid="chart-tf-5m"]').click();
 await page.waitForTimeout(1200);
 
 // chart type switch (area) + volume + theme toggles don't crash
 await frame.locator('[data-testid="chart-type-area"]').click();
 await page.waitForTimeout(500);
-ok(await frame.locator('[data-testid="chartpro"] svg polygon').count() >= 1, 'area type renders polygon');
+ok((await frame.locator('[data-testid="chartpro"]').getAttribute('data-type')) === 'area', 'area type active on TV engine');
 await frame.locator('[data-testid="chart-type-candle"]').click();
 await frame.locator('[data-testid="chart-volume"]').click();
 await frame.locator('[data-testid="chart-theme"]').click();
 await page.waitForTimeout(400);
-ok(await frame.locator('[data-testid="chartpro"] svg rect').count() >= 10, 'volume/theme toggles survive');
+const volOff = (await frame.locator('[data-testid="chartpro"]').getAttribute('data-volume')) === 'off';
+const darkOn = (await frame.locator('[data-testid="chartpro"]').getAttribute('data-theme')) === 'dark';
+ok(volOff && darkOn && (await frame.locator('[data-testid="chartpro"] canvas').count()) >= 1, 'volume/theme toggles survive on TV engine');
 await frame.locator('[data-testid="chart-theme"]').click();
 await frame.locator('[data-testid="chart-volume"]').click();
+
+// official TradingView widget toggle: their chart, their data, honest caption
+await frame.locator('[data-testid="chart-tv-widget"]').click();
+await page.waitForTimeout(1500);
+const tvEng = await frame.locator('[data-testid="chartpro"]').getAttribute('data-engine');
+const tvNote = await frame.locator('[data-testid="chart-engine-note"]').textContent();
+ok(tvEng === 'tradingview-widget' && /© TradingView/.test(tvNote || ''), 'official TV widget view mounts with honest © caption');
+await frame.locator('[data-testid="chart-tv-widget"]').click();
+await page.waitForTimeout(800);
+ok((await frame.locator('[data-testid="chartpro"]').getAttribute('data-engine')) === 'tv-lightweight-charts', 'toggle back to Lightweight Charts engine');
 
 // exchange-qualified search → TSLA
 await frame.locator('[data-testid="terminal-search"]').click();

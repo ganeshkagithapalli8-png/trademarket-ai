@@ -10,7 +10,7 @@ const enter = frame.locator('button:has-text("Enter"), a:has-text("Enter"), butt
 if (await enter.count()) await enter.click().catch(() => {});
 await frame.locator('a[href="/app/terminal"]').first().waitFor({ timeout: 30000 });
 await frame.locator('a[href="/app/terminal"]').first().click();
-await frame.locator('[data-testid="chartpro"] svg rect').first().waitFor({ timeout: 25000 });
+await frame.locator('[data-testid="chartpro"] canvas').first().waitFor({ timeout: 25000 });
 await page.waitForTimeout(2500);
 // screenshot the chart in 5m (default) then after clicking 1m
 const shot = async (name) => {
@@ -21,5 +21,10 @@ await shot('chart-5m.png');
 await frame.locator('[data-testid="chartpro"] button:has-text("1m")').first().click();
 await page.waitForTimeout(3500);
 await shot('chart-1m.png');
+// official TradingView widget view (their chart, their data)
+await frame.locator('[data-testid="chart-tf-5m"]').first().click();
+await frame.locator('[data-testid="chart-tv-widget"]').first().click();
+await page.waitForTimeout(7000);
+await shot('chart-tv-widget.png');
 await browser.close();
 console.log('shots saved');

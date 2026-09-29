@@ -36,6 +36,7 @@ const INDIA_PROXY = 'NASDAQ:INDY'; // iShares India 50 ETF
 export function tvSymbol(inst) {
   if (!inst) return INDIA_PROXY;
   const s = inst.symbol;
+  if (inst.sector === 'US') return `NASDAQ:${s}`; // free embed serves US listings natively
   if (inst.market === 'forex') {
     if (s === 'XAUUSD') return 'TVC:GOLD';
     if (/^[A-Z]{6}$/.test(s)) return `FX:${s}`;
@@ -125,7 +126,7 @@ function Fallback({ height, label }) {
 }
 
 /** Full interactive candlestick chart of the REAL instrument. */
-export function TVChart({ inst, height = 430 }) {
+export function TVChart({ inst, height = 430, interval = '15', theme = 'light', allowSymbolChange = true }) {
   const symbol = tvSymbol(inst);
   const { ref, state } = useEmbed(
     CHART_SRC,
@@ -134,14 +135,14 @@ export function TVChart({ inst, height = 430 }) {
       width: '100%',
       height: String(height),
       symbol,
-      interval: '15',
+      interval,
       timezone: 'Asia/Kolkata',
-      theme: 'light',
+      theme,
       style: '1',
       locale: 'en',
       hide_top_toolbar: false,
       hide_legend: false,
-      allow_symbol_change: true,
+      allow_symbol_change: allowSymbolChange,
       save_image: false,
       support_host: 'https://www.tradingview.com',
     },

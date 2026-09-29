@@ -40,12 +40,12 @@ const wlPrice = (await frame.locator('[data-testid="wl-price-AAPL"]').textConten
 const chips = await frame.locator('[data-testid="chartpro"] span').allTextContents();
 const chipLine = chips.filter((c) => /FINNHUB|LIVE|CLOSED|STREAMING|BARS|ERROR|PAPER/.test(c)).join(' | ');
 const barsSrc = await frame.locator('[data-testid="chart-bars-src"]').textContent().catch(() => '(none)');
-const rectCount = await frame.locator('[data-testid="chartpro"] svg rect').count();
+const rectCount = Number(await frame.locator('[data-testid="chartpro"]').getAttribute('data-bars')) || 0;
 
 console.log('AAPL watchlist price :', wlPrice.trim());
 console.log('chart chips          :', chipLine);
 console.log('bars-source chip     :', barsSrc?.trim());
-console.log('svg rects (candles)  :', rectCount);
+console.log('real bars on chart   :', rectCount);
 
 const el = await frame.locator('[data-testid="chartpro"]').elementHandle();
 await el.screenshot({ path: 'finnhub-aapl.png' });
