@@ -64,6 +64,7 @@ export default function ChartPro({ symbol, name, feed, inst, height = 360 }) {
   const candlesRef = useRef([]);
   candlesRef.current = candles;
 
+  const h = height;
   const pal = dark ? PAL.dark : PAL.light;
 
   /* history load (one fetch per symbol+timeframe change — never per tick) */
