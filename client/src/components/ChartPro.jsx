@@ -67,14 +67,22 @@ export default function ChartPro({ symbol, name, feed, inst, height = 360 }) {
   const h = height;
   const pal = dark ? PAL.dark : PAL.light;
 
-  /* history load (one fetch per symbol+timeframe change — never per tick) */
+  /* history load (one fetch per symbol+timeframe change — never per tick).
+     Generation-guarded: a slow response for the PREVIOUS symbol (e.g. an
+     Upstox 429-cooldown fallback that takes seconds server-side) must never
+     land after the switch and overwrite the new symbol's real bars. */
+  const genRef = useRef(0);
   const load = () => {
     if (!symbol) return;
+    const gen = ++genRef.current;
     setLoading(true); setError(null);
     Market.candlesTf(symbol, tf, 300)
-      .then((r) => { setCandles(r.candles || []); setSrc(r.provider || r.candles?.[0]?.provider || null); })
-      .catch((e) => setError(e?.message || 'Chart data failed to load.'))
-      .finally(() => setLoading(false));
+      .then((r) => {
+        if (gen !== genRef.current) return; // stale — superseded by a newer load
+        setCandles(r.candles || []); setSrc(r.provider || r.candles?.[0]?.provider || null);
+      })
+      .catch((e) => { if (gen === genRef.current) setError(e?.message || 'Chart data failed to load.'); })
+      .finally(() => { if (gen === genRef.current) setLoading(false); });
   };
   useEffect(load, [symbol, tf]); // eslint-disable-line react-hooks/exhaustive-deps
 
