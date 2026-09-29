@@ -23,8 +23,15 @@ import { config } from '../config.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SQL = readFileSync(join(__dirname, 'schema.sql'), 'utf8');
 
-const APP_DB_ROLE_PASSWORD =
-  process.env.APP_DB_ROLE_PASSWORD || readFileSync(join(__dirname, '..', '..', 'data', '.dbrole'), 'utf8').trim();
+function loadAppRolePassword() {
+  if (process.env.APP_DB_ROLE_PASSWORD) return process.env.APP_DB_ROLE_PASSWORD;
+  try {
+    return readFileSync(join(__dirname, '..', '..', 'data', '.dbrole'), 'utf8').trim();
+  } catch {
+    return null; // managed hosts: file is gitignored; tm_app auth simply degrades to forced-RLS admin pool
+  }
+}
+const APP_DB_ROLE_PASSWORD = loadAppRolePassword();
 
 async function runViaConnectionString(connectionString, label) {
   const client = new pg.Client({ connectionString, ssl: connectionString.includes('supabase') ? { rejectUnauthorized: false } : undefined });
@@ -36,7 +43,24 @@ async function runViaConnectionString(connectionString, label) {
     await client.query(SQL);
 
     // Set the tm_app password separately — never stored in schema.sql.
-    await client.query(`alter role tm_app with login nobypassrls password ${client.escapeLiteral(APP_DB_ROLE_PASSWORD)}`);
+    // Managed Postgres (e.g. Render) may forbid ALTER ROLE for the admin user;
+    // the server degrades gracefully to the admin pool with forced RLS (SET ROLE),
+    // so a failure here must not abort the migration.
+    await client.query('savepoint tm_app_pw');
+    if (!APP_DB_ROLE_PASSWORD) throw new Error('no APP_DB_ROLE_PASSWORD available');
+    try {
+      await client.query(`alter role tm_app with login nobypassrls password ${client.escapeLiteral(APP_DB_ROLE_PASSWORD)}`);
+    } catch {
+      await client.query('rollback to savepoint tm_app_pw');
+      await client.query('savepoint tm_app_pw2');
+      try {
+        await client.query(`alter role tm_app with password ${client.escapeLiteral(APP_DB_ROLE_PASSWORD)}`);
+        console.log('→ tm_app password set (password-only ALTER accepted)');
+      } catch (e2) {
+        await client.query('rollback to savepoint tm_app_pw2');
+        console.warn(`→ tm_app password NOT set (${e2.message}) — app will use the admin pool with forced RLS`);
+      }
+    }
 
     await client.query('commit');
     console.log('→ schema + RLS + tm_app role applied');
