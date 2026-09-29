@@ -24,6 +24,8 @@ import aiRoutes from './routes/ai.js';
 import providerRoutes from './routes/provider.js';
 import udfRoutes from './routes/udf.js';
 import { upstoxProvider } from './services/providers/upstox.js';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 if (!config.jwt.secret || config.jwt.secret === 'replace_me_with_a_long_random_string') {
   console.warn('\n⚠  JWT_SECRET is missing or still the placeholder. Generate one with:\n' +
@@ -129,6 +131,14 @@ app.use('/api', contentRoutes); // /api/notes, /api/watchlist, /api/journal
 app.use('/api/learn', learnRoutes);
 app.use('/api/bot', botRoutes);
 app.use('/api/ai', aiRoutes);
+
+// ── built SPA (single-service deploy: this server also serves client/dist) ──
+// Inactive when client/dist is absent, so local `npm run dev` still uses Vite on :5173.
+const DIST = fileURLToPath(new URL('../../client/dist', import.meta.url));
+if (existsSync(DIST)) {
+  app.use(express.static(DIST, { index: false, maxAge: '1h' }));
+  app.get(/^\/(?!api|udf|ws).*/, (_req, res) => res.sendFile(`${DIST}/index.html`));
+}
 
 app.use(notFoundHandler);
 app.use(errorHandler);
