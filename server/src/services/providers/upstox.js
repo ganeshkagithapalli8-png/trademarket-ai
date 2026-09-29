@@ -557,8 +557,10 @@ class UpstoxProvider extends EventEmitter {
         this.reprobeDelayMs = 0;
         this.failStreak = 0;
         if (!this.configured && !this.effectiveToken()) {
-          this.setState('market_closed',
-            'keyless public feed reachable — LIVE during NSE hours; connect an Upstox app for the WebSocket feed');
+          this.setState(this.marketOpen() ? 'live' : 'market_closed',
+            this.marketOpen()
+              ? 'keyless public feed reachable — polling live NSE prices; connect an Upstox app for the WebSocket feed'
+              : 'keyless public feed reachable — LIVE during NSE hours; connect an Upstox app for the WebSocket feed');
           this.stopPublicPoll();
           this.startPublicPoll();
         }
@@ -690,16 +692,20 @@ class UpstoxProvider extends EventEmitter {
     if (!config.upstox.clientId || !config.upstox.clientSecret) {
       const ok = await this.probePublic();
       await this.loadMaster();
-      this.setState(ok ? 'market_closed' : 'unconfigured',
-        ok ? 'keyless public feed reachable — LIVE during NSE hours; connect an Upstox app for the WebSocket feed'
+      const open = this.marketOpen();
+      this.setState(ok ? (open ? 'live' : 'market_closed') : 'unconfigured',
+        ok ? (open ? 'keyless public feed reachable — polling live NSE prices; connect an Upstox app for the WebSocket feed'
+                   : 'keyless public feed reachable — LIVE during NSE hours; connect an Upstox app for the WebSocket feed')
            : 'UPSTOX_CLIENT_ID / UPSTOX_CLIENT_SECRET not set and public feed unreachable');
       return;
     }
     if (!this.effectiveToken()) {
       const ok = await this.probePublic();
       await this.loadMaster();
-      this.setState(ok ? 'market_closed' : 'unconfigured',
-        ok ? 'keyless public feed reachable — LIVE during NSE hours; add a token for the WebSocket feed'
+      const open = this.marketOpen();
+      this.setState(ok ? (open ? 'live' : 'market_closed') : 'unconfigured',
+        ok ? (open ? 'keyless public feed reachable — polling live NSE prices; add a token for the WebSocket feed'
+                   : 'keyless public feed reachable — LIVE during NSE hours; add a token for the WebSocket feed')
            : 'no access token and public feed unreachable — paste UPSTOX_ACCESS_TOKEN or connect via OAuth');
       return;
     }
