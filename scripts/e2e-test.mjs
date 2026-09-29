@@ -14,7 +14,8 @@
 import pg from 'pg';
 
 const BASE = process.argv[2] || 'http://localhost:5000';
-const DB_URL = process.env.DATABASE_URL || 'postgres://postgres:trademarket_local_pw@localhost:5432/trademarket';
+const DB_URL = process.env.DATABASE_URL; // required — no hardcoded credentials in a public repo
+if (!DB_URL) { console.error('DATABASE_URL must be set (local dev: postgres://USER:PW@localhost:5432/trademarket)'); process.exit(1); }
 
 let pass = 0;
 let fail = 0;
