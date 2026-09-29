@@ -70,7 +70,9 @@ app.use(
 
 // ── routes ──────────────────────────────────────────────────────────────────
 
-app.get('/', (_req, res) => {
+// Service info lives under /api — the bare '/' belongs to the SPA when client/dist
+// is present (single-service deploy). Falls through to notFoundHandler otherwise.
+app.get('/api', (_req, res) => {
   res.json({
     service: 'TradeMarket AI API',
     version: '1.0.0',
