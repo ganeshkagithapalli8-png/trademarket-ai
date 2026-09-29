@@ -62,6 +62,24 @@ export default function LivePanel({ symbol = 'RELIANCE' }) {
         </span>
       </div>
 
+      {/* Funding — money goes to YOUR broker, never into this app */}
+      <div data-testid="live-funding" className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1.5">
+        <p className="text-[11px] font-bold text-slate-600">FUND YOUR TRADING ACCOUNT — AT YOUR BROKER, NOT HERE</p>
+        <p className="text-[11.5px] text-slate-500">
+          This app never receives or holds money. Add funds in <b>Kite → Funds → Add funds → UPI</b>: enter the UPI ID
+          linked to the bank account registered with Zerodha, then approve the <b>collect request that Kite sends</b> to your
+          UPI app. Netbanking and NEFT/IMPS also work (NEFT can take up to ~10 hours).
+        </p>
+        <a data-testid="live-fund-broker" href="https://kite.zerodha.com/funds" target="_blank" rel="noopener noreferrer"
+          className="inline-block px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold">Open Kite Funds page ↗</a>
+        <p className="text-[10.5px] text-slate-400">
+          Zerodha accepts only transfers from bank accounts registered to your Zerodha profile (primary/secondary) —
+          <b> digital wallets such as FamPay/PPI apps are not accepted</b>, and transfers started directly from a UPI app
+          instead of from Kite are rejected. UPI pay-ins reflect after 7:30 AM if made between 12 AM–7:30 AM; up to 35
+          transfers/day; ₹5 lakh per UPI transaction. Trading is 18+ with your own KYC-matched bank account.
+        </p>
+      </div>
+
       {!st.configured ? (
         <ol className="list-decimal ml-5 space-y-1.5 text-[12.5px] text-slate-600">
           <li><b>Be 18+</b> and own a Zerodha account with completed KYC (PAN + Aadhaar + bank).</li>

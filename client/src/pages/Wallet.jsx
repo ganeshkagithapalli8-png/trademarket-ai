@@ -70,6 +70,10 @@ export default function Wallet() {
       <div>
         <h1 className="text-[24px] font-extrabold tracking-tight text-slate-900 sm:text-[27px]">Wallet</h1>
         <p className="mt-1 text-[13px] text-slate-500">Simulated Indian rupees. Nothing here is real money.</p>
+        <p data-testid="wallet-real-money-note" className="mt-2 text-[12px] text-slate-500 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+          <b>To trade real money</b>, funds go directly to <b>your own broker account</b> — this app cannot and never will
+          accept deposits (UPI/wallet apps included). Steps live in the <a href="/app/terminal" className="text-blue-600 font-semibold">LIVE · broker</a> tab → “Fund your trading account”.
+        </p>
       </div>
 
       <Alert tone="warn" title="This is a paper wallet">

@@ -181,6 +181,14 @@ const statuses = await frame.locator('[data-testid="order-row"] td:nth-child(7)'
 ok(statuses.some((s) => /cancelled/i.test(s)), `cancel reflected in order list (${statuses.slice(0, 3).join('|')})`);
 
 // portfolio + pnl tabs
+// funding honesty: broker-side funding helper + wallet real-money note
+await frame.locator('[data-testid="tab-live"]').click();
+await frame.locator('[data-testid="live-funding"]').waitFor({ timeout: 8000 });
+const fundHref = await frame.locator('[data-testid="live-fund-broker"]').getAttribute('href');
+const fundText = await frame.locator('[data-testid="live-funding"]').textContent();
+ok(/kite\.zerodha\.com\/funds/.test(fundHref || '') && /never receives or holds money/i.test(fundText) && /FamPay/i.test(fundText),
+  'funding helper points to the broker (Kite funds) and states wallets/FamPay are not accepted');
+
 await frame.locator('[data-testid="tab-portfolio"]').click();
 await page.waitForTimeout(1200);
 const pfText = await frame.locator('body').textContent();
