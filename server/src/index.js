@@ -54,6 +54,9 @@ app.use(
     origin(origin, cb) {
       // No Origin header = curl / server-to-server / same-origin. Allow it.
       if (!origin) return cb(null, true);
+      // Sandboxed iframes (preview panels, embedded viewers) present a 'null'
+      // origin. Auth is header-token based (no cookies), so this is safe.
+      if (origin === 'null') return cb(null, true);
       const allowed = config.clientUrls;
       const ok = allowed.some((a) => origin === a || origin.endsWith(`.${new URL(a).hostname}`));
       if (ok) return cb(null, true);
@@ -139,6 +142,12 @@ app.use('/api/ai', aiRoutes);
 // Inactive when client/dist is absent, so local `npm run dev` still uses Vite on :5173.
 const DIST = fileURLToPath(new URL('../../client/dist', import.meta.url));
 if (existsSync(DIST)) {
+  // Module scripts/stylesheets are fetched in CORS mode; from a sandboxed iframe
+  // (opaque origin) they need an explicit ACAO. The bundle is public and hashed.
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/assets/')) res.setHeader('Access-Control-Allow-Origin', '*');
+    next();
+  });
   app.use(express.static(DIST, { index: false, maxAge: '1h' }));
   app.get(/^\/(?!api|udf|ws).*/, (_req, res) => res.sendFile(`${DIST}/index.html`));
 }
