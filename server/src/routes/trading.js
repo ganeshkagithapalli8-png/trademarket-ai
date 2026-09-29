@@ -17,6 +17,7 @@ import {
 } from '../middleware.js';
 import { getInstrument, MARKETS } from '../services/instruments.js';
 import { quote } from '../services/marketEngine.js';
+import { providerFor, getQuoteAsync } from '../services/marketData.js';
 import { invalidatePending } from '../services/pendingOrders.js';
 import { MARKET_GATES } from '../services/roadmap.js';
 import { pnlOf } from '../services/bot.js';
@@ -157,7 +158,15 @@ router.post('/trade/order', tradeLimiter, asyncH(async (req, res) => {
   const qty = Math.floor(toNumber(req.body.qty) / lot) * lot;
   if (!Number.isFinite(qty) || qty <= 0) throw badRequest(`Quantity must be at least ${lot} (the lot size for ${inst.symbol}).`);
 
-  const q = quote(inst.symbol);
+  // Fill at the REAL exchange price whenever a live provider owns the symbol.
+  // Streaming symbols already carry a live reference in the engine; for
+  // finnhub-owned US symbols not currently ticked, pull one fresh real quote
+  // (a single REST call per order — well inside the free-tier budget).
+  let q = quote(inst.symbol);
+  if (providerFor(inst.symbol) === 'finnhub' && q?.source !== 'live') {
+    const live = await getQuoteAsync(inst.symbol).catch(() => null);
+    if (live?.price != null) q = live;
+  }
   if (!q) throw badRequest('No price available for that instrument.');
 
   const orderType = req.body.orderType === 'limit' ? 'limit' : req.body.orderType === 'stop' ? 'stop' : 'market';
@@ -248,11 +257,13 @@ router.post('/trade/order', tradeLimiter, asyncH(async (req, res) => {
   });
 
   res.status(201).json({
-    position: shapePosition(result.position, quote(inst.symbol)?.price ?? fillPrice),
+    position: shapePosition(result.position, q?.price ?? fillPrice),
     fillPrice: round(fillPrice),
     margin: result.margin,
     simBalance: result.simBalance,
     simulated: true,
+    currency: inst.currency || 'INR',
+    priceSource: q?.source === 'live' ? 'live' : 'simulated', // honesty: was the fill price a real exchange print?
     notice: 'Paper fill against simulated liquidity. No real order was sent anywhere.',
   });
 }));
@@ -281,7 +292,11 @@ router.post('/trade/close/:id', tradeLimiter, asyncH(async (req, res) => {
     const pos = p.rows[0];
     if (!pos) throw notFound('No open position with that id.');
 
-    const q = quote(pos.symbol);
+    let q = quote(pos.symbol);
+    if (providerFor(pos.symbol) === 'finnhub' && q?.source !== 'live') {
+      const live = await getQuoteAsync(pos.symbol).catch(() => null);
+      if (live?.price != null) q = live;
+    }
     const raw = q?.price ?? Number(pos.current_price);
     const slip = raw * (SLIPPAGE_BPS / 10_000);
     const exitPrice = pos.side === 'long' ? raw - slip : raw + slip;

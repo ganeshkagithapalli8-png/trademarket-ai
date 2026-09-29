@@ -63,7 +63,8 @@ const fh = await (await fetch(`${API}/api/provider/finnhub/status`)).json();
 const fhSecretFree = !JSON.stringify(fh).match(/"[^"]*(?:secret|token|key)[^"]*"\s*:\s*"[A-Za-z0-9_./-]{4,}"/i);
 ok(fhSecretFree && ['live', 'market_closed', 'error', 'unconfigured'].includes(fh.state), `finnhub status honest + secret-free (${fh.state})`);
 if (fh.state === 'live' || fh.state === 'market_closed') {
-  const aapl = await (await fetch(`${API}/api/market/quote/AAPL`)).json();
+  const r0 = await (await fetch(`${API}/api/market/quote/AAPL`)).json();
+  const aapl = r0?.quote ?? r0;
   ok(aapl?.feed?.source === 'finnhub' && aapl?.source !== 'simulated' && aapl?.price > 50 && aapl?.price < 5000,
     `AAPL real-time via FINNHUB: $${aapl?.price} (${aapl?.feed?.label})`);
 } else {

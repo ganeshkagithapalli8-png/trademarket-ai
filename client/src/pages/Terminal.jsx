@@ -251,7 +251,7 @@ function OrderPanel({ symbol, inst, price, onDone }) {
     setBusy(true);
     try {
       const r = await Trade.order(body);
-      onDone(r.pending ? `Resting ${type} order placed — fills when price crosses ${type === 'limit' ? limitPrice : stopPrice}.` : `${side.toUpperCase()} ${qn} ${symbol} filled @ ₹${Number(r.fillPrice).toFixed(2)} (paper).`);
+      onDone(r.pending ? `Resting ${type} order placed — fills when price crosses ${type === 'limit' ? limitPrice : stopPrice}.` : `${side.toUpperCase()} ${qn} ${symbol} filled @ ${r.currency === 'USD' ? '$' : '₹'}${Number(r.fillPrice).toFixed(2)} (paper${r.priceSource === 'live' ? ' · real price' : ''}).`);
     } catch (e) {
       onDone(e?.message || 'Order rejected.', 'error');
     } finally {

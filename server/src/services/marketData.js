@@ -76,7 +76,7 @@ export function feedInfo(symbol, q) {
     if (q?.source === 'simulated') {
       return { source: 'paper', latency: 'paper', label: 'PAPER VENUE · FINNHUB UNAVAILABLE', marketOpen: open, providerState: st.state, degraded: true };
     }
-    if (st.state === 'live') return { source: 'finnhub', latency: 'live', label: 'LIVE · FINNHUB', marketOpen: true, providerState: 'live' };
+    if (st.state === 'live') return { source: 'finnhub', latency: 'live', label: 'LIVE · FINNHUB', marketOpen: true, providerState: 'live', currency: inst?.currency || 'USD' };
     if (!open || st.state === 'market_closed') return { source: 'finnhub', latency: 'closed', label: 'MARKET CLOSED', marketOpen: false, providerState: st.state };
     return { source: 'finnhub', latency: 'error', label: 'CONNECTION ERROR', marketOpen: open, providerState: st.state, reason: st.reason };
   }
