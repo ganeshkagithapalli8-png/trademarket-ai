@@ -48,10 +48,14 @@ router.get('/candles-tf/:symbol', asyncH(async (req, res) => {
   const tf = String(req.query.tf || '5m');
   const limit = Math.max(20, Math.min(Number(req.query.limit) || 240, 500));
   const candles = await marketData.getHistoricalDataAsync(req.params.symbol, tf, limit);
+  const feed = marketData.feedInfo(req.params.symbol);
+  // Empty history under a real feed (Finnhub builds bars from live ticks) must
+  // NOT be stamped 'paper' — that would show a fake "PAPER BARS" warning chip
+  // on a chart that simply hasn't accumulated real bars yet.
+  const provider = candles[candles.length - 1]?.provider
+    || (candles.length ? 'paper' : (feed.source === 'paper' ? 'paper' : feed.source));
   res.json({
-    symbol: req.params.symbol, timeframe: tf, candles,
-    feed: marketData.feedInfo(req.params.symbol),
-    provider: candles[candles.length - 1]?.provider || 'paper',
+    symbol: req.params.symbol, timeframe: tf, candles, feed, provider,
   });
 }));
 
