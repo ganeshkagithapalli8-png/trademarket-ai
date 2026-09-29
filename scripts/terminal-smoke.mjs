@@ -54,7 +54,7 @@ const strip = await frame.locator('[data-testid="quote-strip"]').textContent();
 ok(strip.includes('Prev close') && strip.includes('Bid') && strip.includes('Ask') && strip.includes('Volume'), 'quote strip shows O/H/L, prev close, volume, bid/ask');
 const prov = await (await fetch(`${API}/api/provider/upstox/status`)).json();
 const publicMode = prov.publicMode === true; // keyless official feed currently reachable
-const secretFree = !JSON.stringify(prov).match(/secret|token["']?\s*:\s*["'][A-Za-z0-9]/i);
+const secretFree = !JSON.stringify(prov).match(/"[^"]*(?:secret|token)[^"]*"\s*:\s*"[A-Za-z0-9_./-]{4,}"/i); // key:value pairs only — the word 'secret' in honest reason text is fine
 ok(secretFree && (publicMode ? ['market_closed', 'live'].includes(prov.state) : prov.state === 'unconfigured'),
   `provider status honest + secret-free (${prov.state}, publicMode=${publicMode})`);
 const udf = await (await fetch(`${API}/udf/config`)).json();
