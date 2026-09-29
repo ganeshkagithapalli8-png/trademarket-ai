@@ -40,7 +40,8 @@ app.disable('x-powered-by');
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
-    contentSecurityPolicy: false, // API only — no HTML is served from here
+    contentSecurityPolicy: false, // SPA bundle is same-origin; no third-party scripts are required
+    frameguard: false, // this server also serves the SPA — allow iframe embedding (previews, shared panels)
   })
 );
 app.use(compression());
