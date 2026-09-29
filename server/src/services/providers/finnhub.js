@@ -69,7 +69,7 @@ class FinnhubProvider extends EventEmitter {
 
   async fetchQuote(symbol) {
     const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${config.finnhub.apiKey}`;
-    const r = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    const r = await fetch(url, { signal: AbortSignal.timeout(6_000) });
     if (r.status === 429) {
       throw Object.assign(new Error('finnhub rate-limited'), { code: 429, retryAfter: Number(r.headers.get('retry-after')) || 0 });
     }
@@ -123,27 +123,28 @@ class FinnhubProvider extends EventEmitter {
     const run = async () => {
       const symbols = [...this.subscribed].slice(0, 8); // keep ≤ 48 req/min at 10s cadence
       if (!symbols.length) return;
-      let ok = 0;
-      for (const sym of symbols) {
-        try {
-          const j = await this.fetchQuote(sym);
+      // Parallel: one slow/hanging request must not serialise the whole cycle
+      // (sequential 6s timeouts previously stalled ticks for 20-30s on cold egress).
+      const results = await Promise.allSettled(symbols.map(async (sym) => ({ sym, j: await this.fetchQuote(sym) })));
+      let ok = 0; let rateLimited = false; let fatal = null;
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
           ok++;
           this.lastTickAt = Date.now();
-          this.emit('tick', this.toTick(sym, j));
-        } catch (e) {
-          if (e.fatal) {
-            this.stopPoll();
-            this.setState('error', e.message);
-            log('disabled:', e.message);
-            return;
-          }
-          if (e.code === 429) {
-            const retryMs = Number(e.retryAfter) > 0 ? e.retryAfter * 1000 : 0;
-            this.pollMs = Math.min(Math.max(this.pollMs * 2, retryMs), 300_000);
-            this.restartPoll();
-            return;
-          }
-        }
+          this.emit('tick', this.toTick(r.value.sym, r.value.j));
+        } else if (r.reason?.fatal) fatal = r.reason;
+        else if (r.reason?.code === 429) rateLimited = true;
+      }
+      if (fatal) {
+        this.stopPoll();
+        this.setState('error', fatal.message);
+        log('disabled:', fatal.message);
+        return;
+      }
+      if (rateLimited) {
+        this.pollMs = Math.min(this.pollMs * 2, 300_000);
+        this.restartPoll();
+        return;
       }
       this.failStreak = ok ? 0 : this.failStreak + 1;
       if (ok && this.pollMs !== config.finnhub.pollMs) { this.pollMs = config.finnhub.pollMs; this.restartPoll(); }

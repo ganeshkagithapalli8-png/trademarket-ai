@@ -148,6 +148,29 @@ export function useLiveQuotes(symbols) {
     return () => unsubs.forEach((u) => u());
   }, [key]);
 
+  // One-shot REST prime: paint real provider prices immediately on mount
+  // instead of showing "…" until the first socket tick lands (provider prime
+  // can take 10-30s after a cold boot). Socket ticks take over instantly and
+  // never get overwritten by stale prime data (seed-only-if-empty).
+  useEffect(() => {
+    const list = key ? key.split(',') : [];
+    if (!list.length) return undefined;
+    let alive = true;
+    Promise.allSettled(list.map((s) => Market.quote(s).catch(() => null))).then((res) => {
+      if (!alive) return;
+      setQuotes((prev) => {
+        const next = { ...prev };
+        res.forEach((r, i) => {
+          const sym = list[i];
+          const q = r.status === 'fulfilled' ? (r.value?.quote ?? r.value) : null;
+          if (q?.price != null && !next[sym]) next[sym] = q;
+        });
+        return next;
+      });
+    });
+    return () => { alive = false; };
+  }, [key]);
+
   // REST fallback: if the socket can't get through (some proxies don't
   // forward WebSocket upgrades), keep values honest with slow polling of
   // the same provider facade. The moment the socket goes live it takes over.

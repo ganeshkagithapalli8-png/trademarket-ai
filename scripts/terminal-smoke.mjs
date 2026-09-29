@@ -38,7 +38,7 @@ await frame.locator('[data-testid^="wl-row-"]').first().waitFor({ timeout: 15000
 const wlRows = await frame.locator('[data-testid^="wl-row-"]').count();
 ok(wlRows >= 4, `watchlist has ${wlRows} rows`);
 let priced = false;
-for (let i = 0; i < 16 && !priced; i++) {
+for (let i = 0; i < 28 && !priced; i++) { // ~21s: covers one cold-boot provider prime cycle
   const txt = await frame.locator('[data-testid^="wl-price-"]').first().textContent();
   priced = txt && txt.trim() !== '…';
   if (!priced) await page.waitForTimeout(750);
