@@ -55,6 +55,9 @@ export default function ChartPro({ symbol, name, feed, height = 360 }) {
   const load = () => {
     if (!symbol) return;
     setLoading(true); setError(null); setOffset(0);
+    // Auto-fit: target ~9px per candle slot so bodies stay thick and gap-free
+    // on any screen width; wheel-zoom still overrides until the next TF/symbol switch.
+    setSpan(Math.max(30, Math.min(160, Math.round(((size.w || 640) - 72) / 9))));
     Market.candlesTf(symbol, tf, 300)
       .then((r) => setCandles(r.candles || []))
       .catch((e) => setError(e?.message || 'Chart data failed to load.'))
@@ -206,7 +209,7 @@ export default function ChartPro({ symbol, name, feed, height = 360 }) {
             {/* volume pane */}
             {showVol && geo.vols > 0 && visible.map((c, i) => {
               const vh = geo.maxV ? ((c.v || 0) / geo.maxV) * (geo.vols - 6) : 0;
-              return <rect key={`v${i}`} x={geo.x(i) - geo.step * 0.32} y={geo.priceH + geo.vols - vh} width={Math.max(1, geo.step * 0.64)} height={Math.max(0.5, vh)} fill={c.c >= c.o ? pal.up : pal.down} opacity={0.35} />;
+              return <rect key={`v${i}`} x={geo.x(i) - geo.step * 0.41} y={geo.priceH + geo.vols - vh} width={Math.max(1.5, geo.step * 0.82)} height={Math.max(0.5, vh)} fill={c.c >= c.o ? pal.up : pal.down} opacity={0.35} />;
             })}
             {/* series */}
             {type === 'line' && (
@@ -231,21 +234,21 @@ export default function ChartPro({ symbol, name, feed, height = 360 }) {
               if (type === 'ohlc') return (
                 <g key={i} stroke={col} strokeWidth={1.2}>
                   <line x1={x} x2={x} y1={geo.y(c.h)} y2={geo.y(c.l)} />
-                  <line x1={x - geo.step * 0.3} x2={x} y1={geo.y(c.o)} y2={geo.y(c.o)} />
-                  <line x1={x} x2={x + geo.step * 0.3} y1={geo.y(c.c)} y2={geo.y(c.c)} />
+                  <line x1={x - geo.step * 0.38} x2={x} y1={geo.y(c.o)} y2={geo.y(c.o)} />
+                  <line x1={x} x2={x + geo.step * 0.38} y1={geo.y(c.c)} y2={geo.y(c.c)} />
                 </g>
               );
               const bodyTop = geo.y(Math.max(c.o, c.c));
-              const bodyH = Math.max(1, Math.abs(geo.y(c.o) - geo.y(c.c)));
+              const bodyH = Math.max(2, Math.abs(geo.y(c.o) - geo.y(c.c)));
               return (
                 <g key={i}>
-                  <line x1={x} x2={x} y1={geo.y(c.h)} y2={geo.y(c.l)} stroke={col} strokeWidth={1} />
-                  <rect x={x - geo.step * 0.32} y={bodyTop} width={Math.max(1.5, geo.step * 0.64)} height={bodyH} fill={col} />
+                  <line x1={x} x2={x} y1={geo.y(c.h)} y2={geo.y(c.l)} stroke={col} strokeWidth={geo.step >= 10 ? 1.4 : 1} />
+                  <rect x={x - geo.step * 0.41} y={bodyTop} width={Math.max(2, geo.step * 0.82)} height={bodyH} fill={col} />
                 </g>
               );
             })}
             {/* x labels */}
-            {visible.map((c, i) => (i % Math.ceil(visible.length / 6) === 0 ? (
+            {visible.map((c, i) => (i % Math.max(1, Math.ceil(visible.length / Math.max(3, Math.floor(geo.pw / 110)))) === 0 ? (
               <text key={`x${i}`} x={geo.x(i)} y={h - (showVol ? 30 : 8)} fontSize={10} fill={pal.axis} textAnchor="middle">{fmtT(c.t, tf)}</text>
             ) : null))}
             {/* last price marker */}

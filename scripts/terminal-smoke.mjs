@@ -8,13 +8,15 @@ import { chromium } from 'playwright';
 let pass = 0; let fail = 0;
 const ok = (cond, label) => { if (cond) { pass++; console.log('  ✓', label); } else { fail++; console.log('  ✗ FAIL:', label); } };
 
+const BASE = process.env.SMOKE_BASE || 'http://localhost:5173'; // app origin (prod: https://trademarket-api.onrender.com)
+const API = process.env.SMOKE_API || `${API}`;   // API origin (same as BASE on single-service deploys)
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 
 await page.setContent(`<!doctype html><html><body style="margin:0">
-  <iframe id="app" sandbox="allow-scripts allow-forms allow-popups" src="http://localhost:5173" style="width:100%;height:96vh;border:0"></iframe>
+  <iframe id="app" sandbox="allow-scripts allow-forms allow-popups" src="${BASE}" style="width:100%;height:96vh;border:0"></iframe>
 </body></html>`);
 const frame = page.frameLocator('#app');
 
@@ -50,14 +52,14 @@ const stateChip = (await frame.locator('[data-testid="terminal-state"]').textCon
 ok(['● LIVE', '● DELAYED', '● MARKET CLOSED', '● CONNECTION ERROR', 'PAPER VENUE · PROVIDER OFF'].includes(stateChip), `4-state chip: "${stateChip}"`);
 const strip = await frame.locator('[data-testid="quote-strip"]').textContent();
 ok(strip.includes('Prev close') && strip.includes('Bid') && strip.includes('Ask') && strip.includes('Volume'), 'quote strip shows O/H/L, prev close, volume, bid/ask');
-const prov = await (await fetch('http://localhost:5000/api/provider/upstox/status')).json();
+const prov = await (await fetch(`${API}/api/provider/upstox/status`)).json();
 const publicMode = prov.publicMode === true; // keyless official feed currently reachable
 const secretFree = !JSON.stringify(prov).match(/secret|token["']?\s*:\s*["'][A-Za-z0-9]/i);
 ok(secretFree && (publicMode ? ['market_closed', 'live'].includes(prov.state) : prov.state === 'unconfigured'),
   `provider status honest + secret-free (${prov.state}, publicMode=${publicMode})`);
-const udf = await (await fetch('http://localhost:5000/udf/config')).json();
+const udf = await (await fetch(`${API}/udf/config`)).json();
 ok(Array.isArray(udf.supported_resolutions) && udf.supported_resolutions.includes('240'), 'UDF config serves 9 resolutions');
-const udfh = await (await fetch('http://localhost:5000/udf/history?symbol=RELIANCE&resolution=5&from=' + (Math.floor(Date.now()/1000) - 86400) + '&to=' + Math.floor(Date.now()/1000))).json();
+const udfh = await (await fetch(`${API}/udf/history?symbol=RELIANCE&resolution=5&from=` + (Math.floor(Date.now()/1000) - 86400) + '&to=' + Math.floor(Date.now()/1000))).json();
 ok(udfh.s === 'ok' && udfh.t.length > 10, `UDF history ok (${udfh.t.length} bars)`);
 await frame.locator('[data-testid="terminal-feed"]').waitFor({ timeout: 12000 });
 const feedLabel = (await frame.locator('[data-testid="terminal-feed"]').textContent()).trim();
