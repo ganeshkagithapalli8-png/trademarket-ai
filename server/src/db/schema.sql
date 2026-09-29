@@ -381,7 +381,7 @@ create index if not exists live_candles_sym_t on live_candles (symbol, t desc);
 -- session (encrypted access token) and a full audit trail of every live
 -- order attempt. Funds stay at the SEBI-registered broker at all times.
 create table if not exists live_sessions (
-  user_id      uuid        primary key references users(id) on delete cascade,
+  user_id      uuid        primary key references profiles(id) on delete cascade,
   broker       text        not null default 'zerodha',
   access_token text        not null,            -- AES-256-GCM ciphertext
   token_iv     text        not null,
@@ -394,7 +394,7 @@ create table if not exists live_sessions (
 
 create table if not exists live_orders (
   id             uuid        primary key default gen_random_uuid(),
-  user_id        uuid        not null references users(id) on delete cascade,
+  user_id        uuid        not null references profiles(id) on delete cascade,
   ts             timestamptz not null default now(),
   symbol         text        not null,
   exchange       text        not null,
