@@ -15,6 +15,7 @@ import { Market, Trade } from '../lib/api.js';
 import { useLiveQuotes, useSocketStatus, useProviderStatus } from '../lib/marketSocket.js';
 import { mountTradingViewChart } from '../lib/tvDatafeed.js';
 import ChartPro from '../components/ChartPro.jsx';
+import LivePanel from '../components/LivePanel.jsx';
 import Watchlist from '../components/Watchlist.jsx';
 import { tvSymbol } from '../components/TradingView.jsx';
 import { Icon, usePoll } from '../components/ui.jsx';
@@ -180,7 +181,7 @@ export default function Terminal() {
       </div>
 
       {/* ── bottom tabs ────────────────────────────────────────── */}
-      <BottomPanel tab={tab} setTab={setTab} positions={positions} orders={orders} closed={closed} portfolio={portfolio} bump={() => setBump((b) => b + 1)} />
+      <BottomPanel tab={tab} setTab={setTab} positions={positions} orders={orders} closed={closed} portfolio={portfolio} bump={() => setBump((b) => b + 1)} symbol={symbol} />
     </div>
   );
 }
@@ -343,9 +344,10 @@ const TABS = [
   { id: 'history', label: 'Trade history' },
   { id: 'portfolio', label: 'Portfolio' },
   { id: 'pnl', label: 'P&L' },
+  { id: 'live', label: 'LIVE · broker' },
 ];
 
-function BottomPanel({ tab, setTab, positions, orders, closed, portfolio, bump }) {
+function BottomPanel({ tab, setTab, positions, orders, closed, portfolio, bump, symbol }) {
   const pos = positions.data?.positions || [];
   const ord = orders.data?.orders || [];
   const cls = closed.data?.positions || [];
@@ -365,7 +367,9 @@ function BottomPanel({ tab, setTab, positions, orders, closed, portfolio, bump }
       </div>
 
       <div className="p-3 max-h-72 overflow-y-auto">
-        {tab === 'positions' ? (
+        {tab === 'live' ? (
+          <LivePanel symbol={symbol} />
+        ) : tab === 'positions' ? (
           pos.length === 0 ? <Empty text="No open positions. Place a paper order to see one here." /> : (
             <table className="w-full text-xs">
               <thead><tr className="text-left text-slate-400 text-[10px] uppercase tracking-wide">

@@ -375,3 +375,37 @@ create table if not exists live_candles (
   primary key (symbol, t)
 );
 create index if not exists live_candles_sym_t on live_candles (symbol, t desc);
+
+-- ── LIVE (own-broker) fenced routing ─────────────────────────────────────
+-- The app NEVER holds money. These tables store the user's daily broker
+-- session (encrypted access token) and a full audit trail of every live
+-- order attempt. Funds stay at the SEBI-registered broker at all times.
+create table if not exists live_sessions (
+  user_id      uuid        primary key references users(id) on delete cascade,
+  broker       text        not null default 'zerodha',
+  access_token text        not null,            -- AES-256-GCM ciphertext
+  token_iv     text        not null,
+  token_tag    text        not null,
+  obtained_at  timestamptz not null default now(),
+  expires_at   timestamptz not null,            -- Kite tokens die ~6am IST daily
+  active       boolean     not null default false, -- live-mode opt-in switch
+  updated_at   timestamptz not null default now()
+);
+
+create table if not exists live_orders (
+  id             uuid        primary key default gen_random_uuid(),
+  user_id        uuid        not null references users(id) on delete cascade,
+  ts             timestamptz not null default now(),
+  symbol         text        not null,
+  exchange       text        not null,
+  side           text        not null,
+  qty            integer     not null,
+  product        text        not null,
+  order_type     text        not null,
+  price          numeric(18,4),
+  status         text        not null,          -- requested | placed | rejected | panic_cancelled | error
+  broker_order_id text,
+  detail         text,
+  day_pnl_before numeric(18,2)
+);
+create index if not exists live_orders_user_ts on live_orders (user_id, ts desc);

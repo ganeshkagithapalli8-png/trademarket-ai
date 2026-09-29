@@ -158,6 +158,19 @@ export const Wallet = {
   transactions: () => api.get('/api/wallet/transactions'),
 };
 
+export const Live = {
+  status: () => api.get('/api/live/status'),
+  login: () => api.get('/api/live/login'),
+  session: (request_token) => api.post('/api/live/session', { request_token }),
+  logout: () => api.del('/api/live/session'),
+  enable: () => api.post('/api/live/enable', {}),
+  disable: () => api.post('/api/live/disable', {}),
+  panic: () => api.post('/api/live/panic', {}),
+  order: (body) => api.post('/api/live/order', body),
+  orders: () => api.get('/api/live/orders'),
+  positions: () => api.get('/api/live/positions'),
+};
+
 export const Trade = {
   order: (b) => api.post('/api/trade/order', b),
   cancelOrder: (id) => api.del(`/api/trade/order/${id}`),

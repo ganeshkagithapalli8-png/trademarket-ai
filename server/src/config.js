@@ -68,6 +68,17 @@ export const config = {
     apiKey: process.env.FINNHUB_API_KEY || '',   // server-side only — never shipped to the client
     pollMs: Number(process.env.FINNHUB_POLL_MS || 10_000),
   },
+  zerodha: {
+    // Kite Connect (user's OWN broker account). Secrets live server-side only.
+    apiKey: process.env.ZERODHA_API_KEY || '',
+    apiSecret: process.env.ZERODHA_API_SECRET || '',
+    redirectUri: process.env.ZERODHA_REDIRECT_URI || 'https://trademarket-api.onrender.com/api/live/callback',
+  },
+  live: {
+    // Fences for real-money routing through the user's own broker account.
+    dailyLossInr: Number(process.env.LIVE_DAILY_LOSS_INR || 2000), // hard stop for new live orders
+    maxOrderNotionalInr: Number(process.env.LIVE_MAX_ORDER_NOTIONAL_INR || 100000),
+  },
   safety: {
     // Hard rail. There is no order-routing code in this repository at all.
     paperTradingOnly: bool(process.env.PAPER_TRADING_ONLY, true),

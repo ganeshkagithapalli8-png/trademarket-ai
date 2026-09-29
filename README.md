@@ -227,3 +227,28 @@ through the Finnhub free tier with the key stored as `FINNHUB_API_KEY`
 - `GET /api/provider/finnhub/status` exposes keyless health for the UI.
 
 Rotate `FINNHUB_API_KEY` if it was ever pasted into a chat or screenshot.
+
+## Live routing — your own Zerodha account (fenced, opt-in)
+
+Real-money trading happens **only** through your own SEBI-registered broker. This app never holds
+funds; it sends *your confirmed* orders to *your* Kite Connect account and reads back positions.
+
+**Setup (one-time):** 18+ with a KYC-complete Zerodha account → sign up at `developers.kite.trade`
+→ free **Personal plan** (order placement + portfolio; live *data* stays on our Upstox/Finnhub feeds)
+→ create an app with redirect URL `https://trademarket-api.onrender.com/api/live/callback` → put
+`ZERODHA_API_KEY` + `ZERODHA_API_SECRET` in the server env (never the client).
+
+**Daily:** terminal → `LIVE · broker` tab → **Connect Zerodha** (official Kite login; token expires
+~6am IST) → **Enable LIVE mode** (re-checks 18+).
+
+**Fences (server-enforced, shown in the UI):**
+- live OFF by default; explicit per-user opt-in; every enable re-verifies 18+
+- every order requires `confirm:true` through a review modal — nothing silent
+- daily loss stop `LIVE_DAILY_LOSS_INR` (default ₹2,000) blocks new orders; paper keeps working
+- per-order notional cap `LIVE_MAX_ORDER_NOTIONAL_INR` (default ₹1,00,000)
+- PANIC kill switch: cancels every OPEN broker order and drops to paper
+- full audit trail (`live_orders`); access tokens AES-256-GCM encrypted at rest
+- MARKET orders always carry 0.5% market protection (broker requirement)
+- the AI bot can **never** place live orders — live is self-directed only
+- NSE instruments only in v1 (US/crypto/live-foreign stays paper)
+

@@ -58,6 +58,25 @@ const secretFree = !JSON.stringify(prov).match(/"[^"]*(?:secret|token)[^"]*"\s*:
 ok(secretFree && (publicMode ? ['market_closed', 'live'].includes(prov.state) : prov.state === 'unconfigured'),
   `provider status honest + secret-free (${prov.state}, publicMode=${publicMode})`);
 
+// Fenced live routing: OFF by default, secret-free, refuses silent orders
+const lv = await (await fetch(`${API}/api/live/status`)).json();
+const lvSecretFree = !JSON.stringify(lv).match(/"[^"]*(?:secret|token|key)[^"]*"\s*:\s*"[A-Za-z0-9_./-]{4,}"/i);
+ok(lvSecretFree && lv.mode === 'paper-default' && lv.fences?.confirmEveryOrder === true && lv.fences?.botMayTradeLive === false,
+  `live routing fenced + paper-default (configured=${lv.configured}, session=${lv.session})`);
+const lvOrder = await fetch(`${API}/api/live/order`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: 'RELIANCE', side: 'BUY', qty: 1, confirm: false }) });
+ok(lvOrder.status >= 400, `live order without session/confirm refused (${lvOrder.status})`);
+// authenticated fences: confirm-gate then 18+ gate (guest is 16+ paper only)
+const demo = await (await fetch(`${API}/api/auth/demo`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).json();
+const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${demo.token}` };
+const noConfirm = await fetch(`${API}/api/live/order`, { method: 'POST', headers: auth, body: JSON.stringify({ symbol: 'RELIANCE', side: 'BUY', qty: 1, confirm: false }) });
+const ncBody = await noConfirm.json().catch(() => ({}));
+ok(noConfirm.status === 400 && /confirm/i.test(ncBody.error || ''), `confirm:true fence holds (400 confirm required)`);
+const unverified = await fetch(`${API}/api/live/order`, { method: 'POST', headers: auth, body: JSON.stringify({ symbol: 'RELIANCE', side: 'BUY', qty: 1, confirm: true }) });
+const uvBody = await unverified.json().catch(() => ({}));
+ok(unverified.status === 403 && /18\+|age/i.test(uvBody.error || ''), `18+ fence holds for unverified guest (403)`);
+const noSession = await fetch(`${API}/api/live/enable`, { method: 'POST', headers: auth, body: '{}' });
+ok(noSession.status >= 400, `live enable refused without session/18+ (${noSession.status})`);
+
 // Finnhub (user key): US equities must trade at REAL quotes, honestly labelled
 const fh = await (await fetch(`${API}/api/provider/finnhub/status`)).json();
 const fhSecretFree = !JSON.stringify(fh).match(/"[^"]*(?:secret|token|key)[^"]*"\s*:\s*"[A-Za-z0-9_./-]{4,}"/i);
