@@ -163,7 +163,9 @@ export function useLiveQuotes(symbols) {
         res.forEach((r, i) => {
           const sym = list[i];
           const q = r.status === 'fulfilled' ? (r.value?.quote ?? r.value) : null;
-          if (q?.price != null && !next[sym]) next[sym] = q;
+          // real provider prices only — a simulated fallback must never paint
+          // as a quote (the row would flash fake numbers before real ticks)
+          if (q?.price != null && !next[sym] && q.source !== 'simulated') next[sym] = q;
         });
         return next;
       });
