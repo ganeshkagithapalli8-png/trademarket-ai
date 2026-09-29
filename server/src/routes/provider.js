@@ -9,12 +9,18 @@
 import { Router } from 'express';
 import { asyncH, requireAuth, apiLimiter } from '../middleware.js';
 import { upstoxProvider } from '../services/providers/upstox.js';
+import { finnhubProvider } from '../services/providers/finnhub.js';
 
 const router = Router();
 
 /** Public, secret-free provider health for status chips. */
 router.get('/upstox/status', (_req, res) => {
   res.json(upstoxProvider.status());
+});
+
+/** Finnhub (user key) health — real-time US equity & crypto quotes. Secret-free. */
+router.get('/finnhub/status', (_req, res) => {
+  res.json(finnhubProvider.status());
 });
 
 /** Where the provider's WS feed stands right now (live/down/closed/unconfigured). */

@@ -24,6 +24,7 @@ import aiRoutes from './routes/ai.js';
 import providerRoutes from './routes/provider.js';
 import udfRoutes from './routes/udf.js';
 import { upstoxProvider } from './services/providers/upstox.js';
+import { finnhubProvider } from './services/providers/finnhub.js';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -190,7 +191,7 @@ wss.on('connection', (sock) => {
   let unsubs = [];
   const subs = { quotes: new Set() };
   const send = (obj) => { if (sock.readyState === 1) { try { sock.send(JSON.stringify(obj)); } catch { /* closed mid-send */ } } };
-  send({ t: 'hello', timeframes: TIMEFRAMES, mode: 'paper-venue', upstox: upstoxProvider.status() });
+  send({ t: 'hello', timeframes: TIMEFRAMES, mode: 'paper-venue', upstox: upstoxProvider.status(), finnhub: finnhubProvider.status() });
 
   sock.on('message', (buf) => {
     let msg;
@@ -232,6 +233,10 @@ upstoxProvider.init().then(() => {
   const st = upstoxProvider.status();
   console.log(`  ▸ upstox   : ${st.state}${st.reason ? ` (${st.reason})` : ''}`);
 }).catch((e) => console.error('[upstox] init failed:', e.message));
+finnhubProvider.init().then(() => {
+  const st = finnhubProvider.status();
+  console.log(`  ▸ finnhub  : ${st.state}${st.reason ? ` (${st.reason})` : ''}`);
+}).catch((e) => console.error('[finnhub] init failed:', e.message));
 hub.on('tick', (q) => {
   if (!dbEnabled) return;
   checkPending(q.symbol, q.price).catch((e) => console.error('[pending] check failed:', e.message));

@@ -162,7 +162,9 @@ export default function ChartPro({ symbol, name, feed, height = 360 }) {
         {feed?.label ? <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${feed.latency === 'live' ? 'bg-emerald-500/15 text-emerald-600' : feed.latency === 'delayed' ? 'bg-amber-500/15 text-amber-600' : 'bg-slate-500/15 text-slate-500'}`}>{feed.label}</span> : null}
         {src === 'upstox' ? (
           <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-600" data-testid="chart-bars-src" title="Every bar on this chart is real exchange data">REAL BARS · UPSTOX</span>
-        ) : src === 'paper' && feed?.source === 'upstox' ? (
+        ) : src === 'finnhub' ? (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-600" data-testid="chart-bars-src" title="Every bar was aggregated from real exchange quotes via Finnhub — history builds up live from this server's first real tick">REAL BARS · FINNHUB</span>
+        ) : src === 'paper' && (feed?.source === 'upstox' || feed?.source === 'finnhub') ? (
           <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-600" data-testid="chart-bars-src" title="The exchange feed rate-limited this request — simulated bars shown instead, never dressed up as real">PAPER BARS · feed limited</span>
         ) : null}
         <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${status === 'live' ? 'bg-emerald-500/15 text-emerald-600' : status === 'reconnecting' || status === 'connecting' ? 'bg-amber-500/15 text-amber-600' : 'bg-slate-500/15 text-slate-500'}`} data-testid="chart-ws-status">

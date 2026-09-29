@@ -64,6 +64,10 @@ export const config = {
     feedWs: process.env.UPSTOX_FEED_WS || '', // test-only WS override (SDK hardcodes the prod feed URL)
     pollMs: Number(process.env.UPSTOX_POLL_MS || 30_000), // keyless public-feed cadence; 1-min candles need no faster poll and this respects Upstox's per-IP budget
   },
+  finnhub: {
+    apiKey: process.env.FINNHUB_API_KEY || '',   // server-side only — never shipped to the client
+    pollMs: Number(process.env.FINNHUB_POLL_MS || 10_000),
+  },
   safety: {
     // Hard rail. There is no order-routing code in this repository at all.
     paperTradingOnly: bool(process.env.PAPER_TRADING_ONLY, true),

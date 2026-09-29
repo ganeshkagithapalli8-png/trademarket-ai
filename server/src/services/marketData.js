@@ -13,9 +13,11 @@
  * labelled paper venue, exactly as before.
  */
 import { EventEmitter } from 'node:events';
-import { quote as engineQuote, candles as engineCandles } from './marketEngine.js';
+import { quote as engineQuote, candles as engineCandles, setLiveReference } from './marketEngine.js';
 import { getInstrument } from './instruments.js';
 import { upstoxProvider } from './providers/upstox.js';
+import { finnhubProvider } from './providers/finnhub.js';
+import { persistLiveCandle, fetchLiveCandles } from '../db/liveCandles.js';
 
 export const TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h', '4h', '1D', '1W', '1M'];
 const TF_MS = {
@@ -28,6 +30,7 @@ export const tfMs = (tf) => TF_MS[tf] || TF_MS['5m'];
 export function sessionOpen(inst, now = new Date()) {
   if (!inst) return false;
   if (inst.market === 'crypto') return true;
+  if (inst.market === 'stocks' && inst.sector === 'US' && finnhubProvider.configured) return finnhubProvider.marketOpen(now);
   if (inst.market === 'forex') return now.getUTCDay() >= 1 && now.getUTCDay() <= 5;
   if (upstoxProvider.resolve(inst.symbol) && (inst.market === 'stocks' || inst.market === 'fno' || inst.market === 'ipo')) {
     return upstoxProvider.marketOpen(now);
@@ -37,9 +40,11 @@ export function sessionOpen(inst, now = new Date()) {
   return ist.getDay() >= 1 && ist.getDay() <= 5 && h >= 9.25 && h <= 15.5;
 }
 
-/** Which provider owns this symbol right now? */
+/** Which provider owns this symbol right now? 'upstox' | 'finnhub' | 'paper'. */
 export function providerFor(symbol) {
   if ((upstoxProvider.configured || upstoxProvider.publicOk) && upstoxProvider.resolve(symbol)) return 'upstox';
+  const inst = getInstrument(symbol);
+  if (finnhubProvider.configured && inst?.market === 'stocks' && inst?.sector === 'US') return 'finnhub';
   return 'paper';
 }
 
@@ -63,6 +68,18 @@ export function feedInfo(symbol, q) {
     if (!open || st.state === 'market_closed') return { source: 'upstox', latency: 'closed', label: 'MARKET CLOSED', marketOpen: false, providerState: st.state };
     return { source: 'upstox', latency: 'error', label: 'CONNECTION ERROR', marketOpen: open, providerState: st.state, reason: st.reason };
   }
+  if (prov === 'finnhub') {
+    const st = finnhubProvider.status();
+    const open = finnhubProvider.marketOpen();
+    // A simulated quote under a finnhub-owned symbol means the poll just failed
+    // and we fell back — never dress that up with a provider label.
+    if (q?.source === 'simulated') {
+      return { source: 'paper', latency: 'paper', label: 'PAPER VENUE · FINNHUB UNAVAILABLE', marketOpen: open, providerState: st.state, degraded: true };
+    }
+    if (st.state === 'live') return { source: 'finnhub', latency: 'live', label: 'LIVE · FINNHUB', marketOpen: true, providerState: 'live' };
+    if (!open || st.state === 'market_closed') return { source: 'finnhub', latency: 'closed', label: 'MARKET CLOSED', marketOpen: false, providerState: st.state };
+    return { source: 'finnhub', latency: 'error', label: 'CONNECTION ERROR', marketOpen: open, providerState: st.state, reason: st.reason };
+  }
   const quote_ = q || engineQuote(symbol);
   const source = quote_?.source === 'live' ? 'live' : 'paper';
   let latency = 'paper';
@@ -84,6 +101,14 @@ export async function getQuoteAsync(symbol) {
       console.warn(`[marketData] upstox quote failed for ${symbol} → labelled paper fallback (${e?.message || e})`);
     }
   }
+  if (providerFor(symbol) === 'finnhub') {
+    try {
+      const q = await finnhubProvider.getQuote(symbol);
+      return { ...q, feed: feedInfo(symbol, q) };
+    } catch (e) {
+      console.warn(`[marketData] finnhub quote failed for ${symbol} → labelled paper fallback (${e?.message || e})`);
+    }
+  }
   return getQuote(symbol);
 }
 
@@ -101,6 +126,16 @@ export async function getHistoricalDataAsync(symbol, timeframe = '5m', limit = 2
       const candles = await upstoxProvider.getHistoricalCandles(symbol, tf, limit);
       if (candles.length) return candles.map((c) => ({ ...c, timeframe: tf, provider: 'upstox' }));
     } catch { /* provider hiccup → labelled paper history below */ }
+  }
+  if (providerFor(symbol) === 'finnhub') {
+    // Real history only: 1m buckets aggregated from live Finnhub ticks since the
+    // store began. Empty at first — it fills in as real ticks arrive; we never
+    // substitute simulated bars under a real-feed label.
+    try {
+      const rows = await fetchLiveCandles(symbol, tfMs(tf), limit);
+      if (rows.length) return rows.map((c) => ({ ...c, timeframe: tf, provider: 'finnhub' }));
+    } catch (e) { console.warn('[marketData] live_candles read failed:', e.message); }
+    return [];
   }
   return engineCandles(symbol, tf, limit).map((c) => ({ ...c, timeframe: tf, provider: 'paper' }));
 }
@@ -123,6 +158,8 @@ class TickHub extends EventEmitter {
     this.candles = new Map(); // `${symbol}|${tf}` → { bucket, candle }
     this.timer = null;
     upstoxProvider.on('tick', (q) => this.processTick({ ...q, feed: feedInfo(q.symbol, q) }));
+    finnhubProvider.on('tick', (q) => this.processTick({ ...q, feed: feedInfo(q.symbol, q) }));
+    finnhubProvider.on('status', (st) => this.emit('providerStatus', st));
     upstoxProvider.on('status', (st) => this.emit('providerStatus', st));
   }
 
@@ -133,15 +170,18 @@ class TickHub extends EventEmitter {
   }
 
   subscribeQuotes(symbols) {
-    const up = []; const paper = [];
+    const up = []; const fh = []; const paper = [];
     for (const s of symbols) {
       this.quotes.add(s);
-      (providerFor(s) === 'upstox' ? up : paper).push(s);
+      const pv = providerFor(s);
+      (pv === 'upstox' ? up : pv === 'finnhub' ? fh : paper).push(s);
     }
     if (up.length) upstoxProvider.subscribeToMarketData(up);
+    if (fh.length) finnhubProvider.subscribe(fh);
     return () => {
       symbols.forEach((s) => this.quotes.delete(s));
       if (up.length) upstoxProvider.unsubscribeFromMarketData(up);
+      if (fh.length) finnhubProvider.unsubscribe(fh);
     };
   }
 
@@ -149,21 +189,26 @@ class TickHub extends EventEmitter {
     const key = `${symbol}|${tf}`;
     if (!this.candles.has(key)) this.prime(symbol, tf);
     this.quotes.add(symbol);
-    const isUp = providerFor(symbol) === 'upstox';
-    if (isUp) upstoxProvider.subscribeToMarketData([symbol]);
+    const pv = providerFor(symbol);
+    if (pv === 'upstox') upstoxProvider.subscribeToMarketData([symbol]);
+    if (pv === 'finnhub') finnhubProvider.subscribe([symbol]);
     return () => {
       this.candles.delete(key);
       this.quotes.delete(symbol);
-      if (isUp) upstoxProvider.unsubscribeFromMarketData([symbol]);
+      if (pv === 'upstox') upstoxProvider.unsubscribeFromMarketData([symbol]);
+      if (pv === 'finnhub') finnhubProvider.unsubscribe([symbol]);
     };
   }
 
   async prime(symbol, tf) {
     const hist = await getHistoricalDataAsync(symbol, tf, 2);
     const last = hist[hist.length - 1];
-    const q = providerFor(symbol) === 'upstox' && upstoxProvider.configured
+    const pv = providerFor(symbol);
+    const q = pv === 'upstox' && upstoxProvider.configured
       ? await upstoxProvider.getQuote(symbol).catch(() => engineQuote(symbol))
-      : engineQuote(symbol);
+      : pv === 'finnhub'
+        ? await finnhubProvider.getQuote(symbol).catch(() => engineQuote(symbol))
+        : engineQuote(symbol);
     const bucket = Math.floor(Date.now() / tfMs(tf)) * tfMs(tf);
     this.candles.set(`${symbol}|${tf}`, {
       bucket,
@@ -176,6 +221,12 @@ class TickHub extends EventEmitter {
   /** One tick in → tick event out + candle merge/rollover. Single source. */
   processTick(q, now = Date.now()) {
     if (!q || q.price == null) return;
+    if (q.provider === 'upstox' || q.provider === 'finnhub') {
+      // A real exchange print becomes THE price for this symbol everywhere
+      // (fills, marks, P&L) and is persisted as real 1m candle history.
+      setLiveReference(q.symbol, q);
+      persistLiveCandle(q).catch(() => {});
+    }
     this.emit('tick', q);
     for (const [k, st] of this.candles) {
       if (!k.startsWith(`${q.symbol}|`)) continue;
@@ -200,7 +251,8 @@ class TickHub extends EventEmitter {
    *  symbols tick exclusively from the provider WebSocket — never simulated. */
   pump(now = Date.now()) {
     for (const symbol of this.quotes) {
-      if (providerFor(symbol) === 'upstox') continue;
+      const pv = providerFor(symbol);
+      if (pv === 'upstox' || pv === 'finnhub') continue;
       const q = getQuote(symbol);
       if (!q) continue;
       this.processTick(q, now);

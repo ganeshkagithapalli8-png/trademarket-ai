@@ -57,6 +57,18 @@ const publicMode = prov.publicMode === true; // keyless official feed currently 
 const secretFree = !JSON.stringify(prov).match(/"[^"]*(?:secret|token)[^"]*"\s*:\s*"[A-Za-z0-9_./-]{4,}"/i); // key:value pairs only — the word 'secret' in honest reason text is fine
 ok(secretFree && (publicMode ? ['market_closed', 'live'].includes(prov.state) : prov.state === 'unconfigured'),
   `provider status honest + secret-free (${prov.state}, publicMode=${publicMode})`);
+
+// Finnhub (user key): US equities must trade at REAL quotes, honestly labelled
+const fh = await (await fetch(`${API}/api/provider/finnhub/status`)).json();
+const fhSecretFree = !JSON.stringify(fh).match(/"[^"]*(?:secret|token|key)[^"]*"\s*:\s*"[A-Za-z0-9_./-]{4,}"/i);
+ok(fhSecretFree && ['live', 'market_closed', 'error', 'unconfigured'].includes(fh.state), `finnhub status honest + secret-free (${fh.state})`);
+if (fh.state === 'live' || fh.state === 'market_closed') {
+  const aapl = await (await fetch(`${API}/api/market/quote/AAPL`)).json();
+  ok(aapl?.feed?.source === 'finnhub' && aapl?.source !== 'simulated' && aapl?.price > 50 && aapl?.price < 5000,
+    `AAPL real-time via FINNHUB: $${aapl?.price} (${aapl?.feed?.label})`);
+} else {
+  ok(false, `finnhub key not active in prod (state=${fh.state}: ${fh.reason || '?'})`);
+}
 const udf = await (await fetch(`${API}/udf/config`)).json();
 ok(Array.isArray(udf.supported_resolutions) && udf.supported_resolutions.includes('240'), 'UDF config serves 9 resolutions');
 const udfh = await (await fetch(`${API}/udf/history?symbol=RELIANCE&resolution=5&from=` + (Math.floor(Date.now()/1000) - 86400) + '&to=' + Math.floor(Date.now()/1000))).json();

@@ -359,3 +359,19 @@ alter default privileges in schema public grant select, insert, update, delete o
 -- (appended last: alters must run after every create table)
 alter table positions drop constraint if exists positions_opened_by_check;
 alter table positions add constraint positions_opened_by_check check (opened_by in ('user','bot','pending'));
+
+-- Real intraday candles aggregated server-side from live quote ticks (Finnhub
+-- US equities). Every row came from a real exchange print — never simulated.
+create table if not exists live_candles (
+  symbol    text           not null,
+  t         bigint         not null,
+  o         numeric(18,4)  not null,
+  h         numeric(18,4)  not null,
+  l         numeric(18,4)  not null,
+  c         numeric(18,4)  not null,
+  v         bigint         not null default 0,
+  provider  text           not null default 'finnhub',
+  updated_at timestamptz   not null default now(),
+  primary key (symbol, t)
+);
+create index if not exists live_candles_sym_t on live_candles (symbol, t desc);

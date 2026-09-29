@@ -206,9 +206,40 @@ export function priceAt(symbol, t = Date.now()) {
   return { price: round(Math.exp(logAt(s, t)), inst), source: 'simulated', at: t };
 }
 
+/* Real-exchange references pushed in by marketData whenever a live tick lands
+   (Upstox keyless/WS or Finnhub). While a reference exists it REPLACES the
+   simulated walk level for that symbol everywhere — fills, marks, P&L — so
+   paper money always trades at real prices. */
+const liveRef = new Map();
+export function setLiveReference(symbol, q) {
+  if (!q || q.price == null) return;
+  liveRef.set(symbol, { ...q, at: Date.now() });
+}
+export function getLiveReference(symbol) { return liveRef.get(symbol) || null; }
+
 export function quote(symbol, now = Date.now()) {
   const inst = getInstrument(symbol);
   if (!inst) return null;
+
+  const ref = liveRef.get(symbol);
+  if (ref && ref.price > 0) {
+    const fresh = Date.now() - ref.at < 90_000;
+    const change = ref.change ?? (ref.prevClose ? ref.price - ref.prevClose : null);
+    const changePct = ref.changePct ?? (ref.prevClose ? (change / ref.prevClose) * 100 : null);
+    return {
+      symbol: inst.symbol, name: inst.name, market: inst.market, sector: inst.sector,
+      lot: inst.lot, decimals: inst.decimals ?? 2, currency: inst.currency || 'USD',
+      price: ref.price,
+      prevClose: ref.prevClose ?? ref.price,
+      open: ref.open ?? ref.price,
+      high: ref.high ?? ref.price,
+      low: ref.low ?? ref.price,
+      change: change ?? 0, changePct: changePct ?? 0,
+      volume: ref.volume ?? null,
+      source: fresh ? 'live' : 'frozen', // frozen = last real price, feed currently down
+      at: ref.at,
+    };
+  }
 
   const live = priceAt(symbol, now);
   const prevCloseT = dayStart(now) - 1; // last ms of yesterday
