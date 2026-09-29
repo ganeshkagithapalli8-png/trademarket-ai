@@ -202,3 +202,28 @@ reconnect, 429 backoff, a no-tick watchdog and an instrument-master download.
 Orders, positions and P&L are virtual. No broker execution exists in this
 codebase; a future broker adapter must be a separate, explicitly authorised
 module.
+
+## Real-time US equities (Finnhub, user key)
+
+US-listed stocks (AAPL, TSLA, NVDA, MSFT, …) trade at **real exchange prices**
+through the Finnhub free tier with the key stored as `FINNHUB_API_KEY`
+(server env only — never shipped to the client):
+
+- `GET /v1/quote` is polled every 10 s for symbols currently on screen
+  (≤ 8 symbols → far under the 60 req/min budget; 429s back off and honour
+  `Retry-After`; a rejected key disables the poller instead of hammering).
+- Every real tick becomes the symbol's price **everywhere** — watchlist,
+  quote strip, paper fills, marks, P&L (engine `liveRef` overlay), and is
+  persisted as genuine 1-minute candles in the `live_candles` table.
+  Charts render those real bars (larger timeframes derived on read); the
+  free tier has no candle-history endpoint, so history simply *builds up
+  live* from this server's first real tick — never simulated bars under a
+  real-feed label.
+- Chips stay honest: `LIVE · FINNHUB` while streaming, `MARKET CLOSED`
+  outside NYSE hours (09:30–16:00 ET), `CONNECTION ERROR` when the feed
+  drops, `REAL BARS · FINNHUB` on charts whose bars came from real prints.
+- Free-tier limits, verified: ❌ candle history, ❌ India (NSE/BSE stays on
+  the keyless Upstox feed), ❌ forex quotes. Crypto stays on CoinGecko.
+- `GET /api/provider/finnhub/status` exposes keyless health for the UI.
+
+Rotate `FINNHUB_API_KEY` if it was ever pasted into a chat or screenshot.
