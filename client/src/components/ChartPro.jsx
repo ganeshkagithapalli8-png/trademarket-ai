@@ -37,6 +37,7 @@ export default function ChartPro({ symbol, name, feed, height = 360 }) {
   const [type, setType] = useState('candle');
   const [candles, setCandles] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [src, setSrc] = useState(null); // which source produced the bars on screen
   const [error, setError] = useState(null);
   const [span, setSpan] = useState(90);
   const [offset, setOffset] = useState(0);
@@ -59,7 +60,7 @@ export default function ChartPro({ symbol, name, feed, height = 360 }) {
     // on any screen width; wheel-zoom still overrides until the next TF/symbol switch.
     setSpan(Math.max(30, Math.min(160, Math.round(((size.w || 640) - 72) / 9))));
     Market.candlesTf(symbol, tf, 300)
-      .then((r) => setCandles(r.candles || []))
+      .then((r) => { setCandles(r.candles || []); setSrc(r.provider || r.candles?.[0]?.provider || null); })
       .catch((e) => setError(e?.message || 'Chart data failed to load.'))
       .finally(() => setLoading(false));
   };
@@ -159,6 +160,11 @@ export default function ChartPro({ symbol, name, feed, height = 360 }) {
       <div className={`flex flex-wrap items-center gap-1.5 px-3 py-2 border-b text-xs ${dark ? 'border-white/10' : 'border-slate-200'}`}>
         <div className="font-semibold mr-1">{symbol || '—'}{name ? <span className={dark ? 'text-slate-400' : 'text-slate-500'}> · {name}</span> : null}</div>
         {feed?.label ? <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${feed.latency === 'live' ? 'bg-emerald-500/15 text-emerald-600' : feed.latency === 'delayed' ? 'bg-amber-500/15 text-amber-600' : 'bg-slate-500/15 text-slate-500'}`}>{feed.label}</span> : null}
+        {src === 'upstox' ? (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-600" data-testid="chart-bars-src" title="Every bar on this chart is real exchange data">REAL BARS · UPSTOX</span>
+        ) : src === 'paper' && feed?.source === 'upstox' ? (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-600" data-testid="chart-bars-src" title="The exchange feed rate-limited this request — simulated bars shown instead, never dressed up as real">PAPER BARS · feed limited</span>
+        ) : null}
         <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${status === 'live' ? 'bg-emerald-500/15 text-emerald-600' : status === 'reconnecting' || status === 'connecting' ? 'bg-amber-500/15 text-amber-600' : 'bg-slate-500/15 text-slate-500'}`} data-testid="chart-ws-status">
           {status === 'live' ? 'STREAMING' : status === 'reconnecting' || status === 'connecting' ? 'RECONNECTING…' : 'OFFLINE'}
         </span>
