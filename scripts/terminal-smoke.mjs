@@ -71,11 +71,14 @@ const auth = { 'Content-Type': 'application/json', Authorization: `Bearer ${demo
 const noConfirm = await fetch(`${API}/api/live/order`, { method: 'POST', headers: auth, body: JSON.stringify({ symbol: 'RELIANCE', side: 'BUY', qty: 1, confirm: false }) });
 const ncBody = await noConfirm.json().catch(() => ({}));
 ok(noConfirm.status === 400 && /confirm/i.test(ncBody.error || ''), `confirm:true fence holds (400 confirm required)`);
-const unverified = await fetch(`${API}/api/live/order`, { method: 'POST', headers: auth, body: JSON.stringify({ symbol: 'RELIANCE', side: 'BUY', qty: 1, confirm: true }) });
-const uvBody = await unverified.json().catch(() => ({}));
-ok(unverified.status === 403 && /18\+|age/i.test(uvBody.error || ''), `18+ fence holds for unverified guest (403)`);
+const liveOff = await fetch(`${API}/api/live/order`, { method: 'POST', headers: auth, body: JSON.stringify({ symbol: 'RELIANCE', side: 'BUY', qty: 1, confirm: true }) });
+const loBody = await liveOff.json().catch(() => ({}));
+ok(liveOff.status === 409 && /live mode is off/i.test(loBody.error || ''), `confirmed order still refused while live mode is OFF (409)`);
 const noSession = await fetch(`${API}/api/live/enable`, { method: 'POST', headers: auth, body: '{}' });
-ok(noSession.status >= 400, `live enable refused without session/18+ (${noSession.status})`);
+const nsBody = await noSession.json().catch(() => ({}));
+ok(noSession.status === 409 && /session/i.test(nsBody.error || ''), `enable refused without a broker session (409)`);
+const panicNoAuth = await fetch(`${API}/api/live/panic`, { method: 'POST' });
+ok(panicNoAuth.status === 401, `kill switch requires auth (${panicNoAuth.status})`);
 
 // Finnhub (user key): US equities must trade at REAL quotes, honestly labelled
 const fh = await (await fetch(`${API}/api/provider/finnhub/status`)).json();
